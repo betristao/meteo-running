@@ -1246,15 +1246,173 @@ def main():
 
     with tab_compare:
         # ── Date/City Comparator ───────────────────────
-        st.markdown('<div class="section-header">⚖️ Comparador Visual de Datas Candidatas</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">⚖️ Comparador Pro de Cenários</div>', unsafe_allow_html=True)
         st.markdown(
             '<p style="color:#b2bec3; font-size:0.95rem;">'
-            'Compare até 3 datas ou 3 cidades lado a lado e veja instantaneamente qual é a melhor opção. '
-            'A melhor opção é destacada automaticamente a verde.</p>',
+            'Compare até 3 datas ou 3 cidades lado a lado. Defina as especificidades da sua prova e obtenha '
+            'um relatório detalhado com conclusões, sugestão de hora de partida, impacto fisiológico e recomendações operacionais.</p>',
             unsafe_allow_html=True,
         )
 
+        # ── Race Specifications ───────────────────────
+        st.markdown("##### 🏁 Especificidades da Prova")
+        spec_c1, spec_c2, spec_c3 = st.columns(3)
+        with spec_c1:
+            cmp_dist_opts = {"5 km": 5, "8 km": 8, "10 km": 10, "Meia-Maratona (21.1 km)": 21.1, "Maratona (42.2 km)": 42.2}
+            cmp_dist_nome = st.selectbox("Distância da Prova:", list(cmp_dist_opts.keys()), index=2, key="cmp_dist")
+            cmp_dist_km = cmp_dist_opts[cmp_dist_nome]
+        with spec_c2:
+            cmp_hora_partida = st.slider("Hora Prevista da Partida:", min_value=6, max_value=20, value=9, step=1, key="cmp_hora")
+        with spec_c3:
+            cmp_dir_opts = {"Norte (0°)": 0, "Nordeste (45°)": 45, "Este (90°)": 90, "Sudeste (135°)": 135, "Sul (180°)": 180, "Sudoeste (225°)": 225, "Oeste (270°)": 270, "Noroeste (315°)": 315}
+            cmp_dir_nome = st.selectbox("Direcção do Percurso:", list(cmp_dir_opts.keys()), key="cmp_dir")
+            cmp_dir_graus = cmp_dir_opts[cmp_dir_nome]
+
+        # Duration based on distance
+        if cmp_dist_km <= 5: cmp_duracao = 1
+        elif cmp_dist_km <= 10: cmp_duracao = 2
+        elif cmp_dist_km <= 22: cmp_duracao = 3
+        else: cmp_duracao = 5
+
+        st.divider()
+
         compare_mode = st.radio("Modo de Comparação:", ["Múltiplas Datas (Mesma Cidade)", "Múltiplas Cidades (Mesma Data)"], horizontal=True, key="comp_mode")
+
+        # Helper function to generate report for a scenario
+        def generate_scenario_report(cdata_daily, df_hourly, label, city_name, dist_km, dist_nome, hora_partida, duracao, dir_graus, dir_nome):
+            """Generate a detailed report dict for a comparison scenario."""
+            report = {"label": label, "city": city_name}
+
+            if cdata_daily.empty:
+                report["valid"] = False
+                return report
+            report["valid"] = True
+
+            # Basic stats
+            years_count = cdata_daily["year"].nunique()
+            avg_score = cdata_daily["running_score"].mean()
+            prob_rain = (cdata_daily["precipitation"] > 1).mean() * 100
+            avg_temp = cdata_daily["temp_avg"].mean()
+            avg_app_temp = cdata_daily["app_temp_avg"].mean()
+            avg_wind = cdata_daily["wind_max"].mean()
+            max_temp_hist = cdata_daily["temp_max"].max()
+            min_temp_hist = cdata_daily["temp_min"].min()
+
+            report["years"] = years_count
+            report["score"] = avg_score
+            report["prob_rain"] = prob_rain
+            report["avg_temp"] = avg_temp
+            report["avg_app_temp"] = avg_app_temp
+            report["avg_wind"] = avg_wind
+            report["max_temp_hist"] = max_temp_hist
+            report["min_temp_hist"] = min_temp_hist
+
+            # Sunrise/sunset
+            report["sunrise"] = "-"
+            report["sunset"] = "-"
+            report["daylight"] = "-"
+            if cdata_daily["sunrise"].notna().any():
+                sr_s = cdata_daily["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
+                report["sunrise"] = f"{int(sr_s // 3600):02d}:{int((sr_s % 3600) // 60):02d}"
+                ss_s = cdata_daily["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
+                report["sunset"] = f"{int(ss_s // 3600):02d}:{int((ss_s % 3600) // 60):02d}"
+                report["daylight"] = f"{cdata_daily['daylight_hours'].mean():.1f}h"
+
+            # Risk semaphore
+            risk_score = 0
+            risk_factors = []
+            if avg_temp > 28 or avg_temp < 2: risk_score += 3; risk_factors.append("Temperatura extrema")
+            elif avg_temp > 22 or avg_temp < 5: risk_score += 2; risk_factors.append("Temperatura desfavorável")
+            elif avg_temp > 18 or avg_temp < 8: risk_score += 1
+            if prob_rain > 50: risk_score += 3; risk_factors.append("Chuva muito provável")
+            elif prob_rain > 30: risk_score += 2; risk_factors.append("Chuva moderada")
+            elif prob_rain > 15: risk_score += 1
+            if avg_wind > 30: risk_score += 3; risk_factors.append("Vento forte")
+            elif avg_wind > 20: risk_score += 2; risk_factors.append("Vento moderado")
+            elif avg_wind > 12: risk_score += 1
+            report["risk_score"] = risk_score
+            report["risk_factors"] = risk_factors
+
+            # Performance impact
+            multiplier = 0.5
+            if dist_km >= 42: multiplier = 2.0
+            elif dist_km >= 21: multiplier = 1.5
+            elif dist_km >= 10: multiplier = 1.0
+            if avg_app_temp > 15:
+                report["perf_drop"] = (avg_app_temp - 15) * multiplier
+            else:
+                report["perf_drop"] = 0
+
+            # Hourly analysis - optimal window
+            report["best_window"] = None
+            report["best_hour_score"] = None
+            report["worst_hour"] = None
+            report["worst_hour_score"] = None
+            if df_hourly is not None and not df_hourly.empty:
+                df_hourly["hr_score"] = df_hourly.apply(compute_hourly_score, axis=1)
+                hourly_stats = df_hourly.groupby("hour").agg(score_medio=("hr_score", "mean")).reset_index()
+                # Only consider reasonable running hours (6h-20h)
+                hourly_running = hourly_stats[(hourly_stats["hour"] >= 6) & (hourly_stats["hour"] <= 20)].copy()
+                if not hourly_running.empty:
+                    best_h = hourly_running.loc[hourly_running["score_medio"].idxmax()]
+                    worst_h = hourly_running.loc[hourly_running["score_medio"].idxmin()]
+                    # Tighter threshold: top 95% of best score
+                    threshold = best_h["score_medio"] * 0.95
+                    good_hours = sorted(hourly_running[hourly_running["score_medio"] >= threshold]["hour"].astype(int).tolist())
+                    # Find best contiguous block
+                    if good_hours:
+                        blocks = []
+                        current_block = [good_hours[0]]
+                        for h in good_hours[1:]:
+                            if h == current_block[-1] + 1:
+                                current_block.append(h)
+                            else:
+                                blocks.append(current_block)
+                                current_block = [h]
+                        blocks.append(current_block)
+                        # Pick the longest contiguous block (or first if tied)
+                        best_block = max(blocks, key=len)
+                        report["best_window"] = f"{best_block[0]:02d}:00 - {best_block[-1]+1:02d}:00"
+                        report["best_hour_score"] = best_h["score_medio"]
+                        report["worst_hour"] = int(worst_h["hour"])
+                        report["worst_hour_score"] = worst_h["score_medio"]
+
+                    # Wind analysis at race time
+                    df_race_hours = df_hourly[(df_hourly["hour"] >= hora_partida) & (df_hourly["hour"] < hora_partida + duracao)]
+                    if not df_race_hours.empty:
+                        race_wind = df_race_hours["wind_speed_10m"].mean()
+                        race_wind_dir = df_race_hours["wind_direction_10m"].median()
+                        diff = abs(race_wind_dir - dir_graus)
+                        if diff > 180: diff = 360 - diff
+                        report["headwind"] = diff < 90 and race_wind > 10
+                        report["race_wind"] = race_wind
+                        report["race_wind_dir"] = race_wind_dir
+
+            # Conclusions
+            conclusions = []
+            if risk_score <= 2:
+                conclusions.append("✅ Data segura para a realização da prova")
+            elif risk_score <= 5:
+                conclusions.append("⚠️ Data viável mas requer plano de contingência reforçado")
+            else:
+                conclusions.append("🔴 Data de alto risco — considerar alternativa")
+
+            if report["perf_drop"] > 5:
+                conclusions.append(f"📉 Quebra de performance estimada: +{report['perf_drop']:.1f}% no tempo final")
+            elif report["perf_drop"] > 0:
+                conclusions.append(f"📊 Ligeira quebra de performance: +{report['perf_drop']:.1f}%")
+            else:
+                conclusions.append("🚀 Condições ideais para performance máxima")
+
+            if prob_rain > 30:
+                conclusions.append("🌧 Prever zonas de refúgio e sinalização de piso molhado")
+            if avg_wind > 20:
+                conclusions.append("💨 Reavaliar fixação de estruturas e infláveis")
+            if report.get("headwind") and report.get("race_wind", 0) > 15:
+                conclusions.append(f"🌬️ Vento frontal previsto ({report['race_wind']:.0f} km/h) — impacto nos tempos")
+
+            report["conclusions"] = conclusions
+            return report
 
         if "Datas" in compare_mode:
             num_dates = st.radio("Quantas datas comparar?", [2, 3], horizontal=True, key="num_compare_dates")
@@ -1267,87 +1425,134 @@ def main():
                     cm_num = name_to_num[cm]
                     sd_m = pd.to_datetime(f"2024-{cm_num:02}-01")
                     cd = st.number_input(f"Dia", min_value=1, max_value=sd_m.days_in_month, value=min(15, sd_m.days_in_month), step=1, key=f"cmp_day_{i}")
-                    compare_dates.append((cm_num, cd, f"{cd} {cm} (em {city})"))
+                    compare_dates.append((cm_num, cd, f"{cd} {cm}"))
 
             if st.button("🔄 Comparar Datas", type="primary", use_container_width=True):
-                comp_results = []
-                for month_n, day_n, label in compare_dates:
-                    cdata = df[
-                        (df["month"] == month_n) & 
-                        (df["day"] == day_n) & 
-                        (df["year"] >= year_range[0]) & 
-                        (df["year"] <= year_range[1])
-                    ]
-                    if cdata.empty:
-                        comp_results.append({"Comparação": label, "Score": "-", "Chuva (%)": "-", "Temp (°C)": "-", "Sensação (°C)": "-", "Vento": "-", "Nascer Sol": "-", "Pôr Sol": "-", "Luz": "-"})
-                    else:
-                        sr_str, ss_str, dl_str = "-", "-", "-"
-                        if cdata["sunrise"].notna().any():
-                            sr_s = cdata["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                            sr_str = f"{int(sr_s // 3600):02d}:{int((sr_s % 3600) // 60):02d}"
-                            ss_s = cdata["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                            ss_str = f"{int(ss_s // 3600):02d}:{int((ss_s % 3600) // 60):02d}"
-                            dl_str = f"{cdata['daylight_hours'].mean():.1f}h"
-                        comp_results.append({
-                            "Comparação": label,
-                            "Score": f"{cdata['running_score'].mean():.0f}/100",
-                            "Chuva (%)": f"{(cdata['precipitation'] > 1).mean() * 100:.0f}%",
-                            "Temp (°C)": f"{cdata['temp_avg'].mean():.1f}",
-                            "Sensação (°C)": f"{cdata['app_temp_avg'].mean():.1f}",
-                            "Vento": f"{cdata['wind_max'].mean():.1f} km/h",
-                            "Nascer Sol": sr_str,
-                            "Pôr Sol": ss_str,
-                            "Luz": dl_str,
-                        })
+                reports = []
+                with st.spinner("A analisar cenários e gerar relatório completo..."):
+                    for month_n, day_n, label in compare_dates:
+                        cdata = df[
+                            (df["month"] == month_n) & 
+                            (df["day"] == day_n) & 
+                            (df["year"] >= year_range[0]) & 
+                            (df["year"] <= year_range[1])
+                        ]
+                        # Fetch hourly data
+                        years_list = list(range(year_range[0], year_range[1] + 1))
+                        df_hr = fetch_hourly_specific_day(CITIES[city][0], CITIES[city][1], month_n, day_n, years_list)
+                        report = generate_scenario_report(cdata, df_hr, f"{label} ({city})", city, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
+                        reports.append(report)
 
-                comp_df = pd.DataFrame(comp_results)
-                
-                # Find the best option
-                scores = []
-                for r in comp_results:
-                    try:
-                        scores.append(float(r["Score"].split("/")[0]))
-                    except (ValueError, AttributeError):
-                        scores.append(0)
-                best_idx = scores.index(max(scores)) if scores else 0
+                # Find winner
+                valid_scores = [(i, r["score"]) for i, r in enumerate(reports) if r.get("valid")]
+                best_idx = max(valid_scores, key=lambda x: x[1])[0] if valid_scores else 0
 
-                # Display as visual cards
-                card_cols = st.columns(len(comp_results))
-                for idx, (col, result) in enumerate(zip(card_cols, comp_results)):
+                # Display visual summary cards
+                st.markdown("##### 📊 Resumo Comparativo")
+                card_cols = st.columns(len(reports))
+                for idx, (col, rpt) in enumerate(zip(card_cols, reports)):
                     with col:
+                        if not rpt.get("valid"):
+                            st.warning("Sem dados")
+                            continue
                         is_best = idx == best_idx
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
                         score_color = "#00c853" if is_best else "#74b9ff"
                         badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR OPÇÃO</div>' if is_best else ""
-                        label = result["Comparação"]
-                        score_val = result["Score"]
-                        chuva = result["Chuva (%)"]
-                        temp = result["Temp (°C)"]
-                        sensacao = result["Sensação (°C)"]
-                        vento = result["Vento"]
-                        nascer = result["Nascer Sol"]
-                        por = result["Pôr Sol"]
-                        luz = result["Luz"]
+                        c_label = rpt["label"]
+                        c_score = f"{rpt['score']:.0f}"
+                        c_risk = rpt["risk_score"]
+                        c_sem_icon = "🟢" if c_risk <= 2 else ("🟡" if c_risk <= 5 else "🔴")
+                        c_sem_label = "SEGURA" if c_risk <= 2 else ("PRECAUÇÃO" if c_risk <= 5 else "CRÍTICA")
+                        c_window = rpt["best_window"] if rpt["best_window"] else "-"
+                        c_rain = f"{rpt['prob_rain']:.0f}"
+                        c_temp = f"{rpt['avg_temp']:.1f}"
+                        c_feel = f"{rpt['avg_app_temp']:.1f}"
+                        c_wind = f"{rpt['avg_wind']:.1f}"
+                        c_perf = f"{rpt['perf_drop']:.1f}"
+                        c_sunrise = rpt["sunrise"]
+                        c_sunset = rpt["sunset"]
                         st.markdown(f'''
                         <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
                             {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{label}</div>
-                            <div style="font-size: 2rem; font-weight: 800; color: {score_color}; margin: 8px 0;">{score_val}</div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.8;">
-                                🌧 Chuva: {chuva}<br>
-                                🌡 Temp: {temp}°C<br>
-                                🤒 Sensação: {sensacao}°C<br>
-                                💨 Vento: {vento}<br>
-                                🌅 Nascer Sol: {nascer}<br>
-                                🌇 Pôr Sol: {por}<br>
-                                ☀️ Luz: {luz}
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 8px;">{c_label}</div>
+                            <div style="font-size: 2.2rem; font-weight: 800; color: {score_color}; margin: 4px 0;">{c_score}/100</div>
+                            <div style="font-size: 0.8rem; margin: 6px 0;">{c_sem_icon} {c_sem_label}</div>
+                            <div style="font-size: 0.82rem; color: rgba(255,255,255,0.55); line-height: 1.9; margin-top: 8px;">
+                                🌧 Chuva: {c_rain}%<br>
+                                🌡 Temp: {c_temp}°C<br>
+                                🤒 Sensação: {c_feel}°C<br>
+                                💨 Vento: {c_wind} km/h<br>
+                                ⏱ Janela Ideal: {c_window}<br>
+                                📉 Quebra Perf.: +{c_perf}%<br>
+                                🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}
                             </div>
                         </div>
                         ''', unsafe_allow_html=True)
-                
+
+                # Detailed report per scenario
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.success(f"🏆 **Recomendação:** {comp_results[best_idx]['Comparação']} com Score de {comp_results[best_idx]['Score']}")
+                st.markdown("##### 📋 Relatório Detalhado por Cenário")
+                for idx, rpt in enumerate(reports):
+                    if not rpt.get("valid"):
+                        continue
+                    is_best = idx == best_idx
+                    header_color = "#00c853" if is_best else "#74b9ff"
+                    trophy = " 🏆" if is_best else ""
+                    with st.expander(f"{'🏆 ' if is_best else ''}📄 {rpt['label']} — Score: {rpt['score']:.0f}/100{trophy}", expanded=is_best):
+                        # Semaphore
+                        risk_s = rpt["risk_score"]
+                        if risk_s <= 2:
+                            sem_c, sem_l = "#00c853", "SEGURA"
+                        elif risk_s <= 5:
+                            sem_c, sem_l = "#ff9800", "PRECAUÇÃO"
+                        else:
+                            sem_c, sem_l = "#d32f2f", "CRÍTICA"
+                        st.markdown(f'<div style="background:{sem_c}15; border-left:4px solid {sem_c}; padding:10px 15px; border-radius:4px; margin-bottom:12px;"><strong style="color:{sem_c};">🚦 Data {sem_l}</strong> — Índice de Risco: {risk_s}/9</div>', unsafe_allow_html=True)
+
+                        mc1, mc2, mc3, mc4 = st.columns(4)
+                        mc1.metric("Score", f"{rpt['score']:.0f}/100")
+                        mc2.metric("Chuva >1mm", f"{rpt['prob_rain']:.0f}%")
+                        mc3.metric("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
+                        mc4.metric("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
+
+                        # Optimal window
+                        if rpt["best_window"]:
+                            st.markdown(f'''
+                            <div style="background:rgba(0,200,83,0.08); border-left:4px solid #00c853; padding:10px 15px; border-radius:4px; margin:8px 0;">
+                                <strong style="color:#00c853;">⏱️ Janela Ideal de Partida: {rpt["best_window"]}</strong><br>
+                                <span style="color:#b2bec3; font-size:0.85rem;">
+                                    Melhor hora: Score {rpt["best_hour_score"]:.0f}/100 · 
+                                    Evitar {rpt["worst_hour"]:02d}:00 (Score: {rpt["worst_hour_score"]:.0f}/100)
+                                </span>
+                            </div>
+                            ''', unsafe_allow_html=True)
+
+                        # Performance impact
+                        if rpt["perf_drop"] > 0:
+                            perf_color = "#d32f2f" if rpt["perf_drop"] > 5 else "#ff9800"
+                            st.markdown(f'<div style="background:{perf_color}15; border-left:4px solid {perf_color}; padding:10px 15px; border-radius:4px; margin:8px 0;"><strong style="color:{perf_color};">📉 Quebra de Performance ({cmp_dist_nome}): +{rpt["perf_drop"]:.1f}%</strong><br><span style="color:#b2bec3; font-size:0.85rem;">Sensação Térmica: {rpt["avg_app_temp"]:.1f}°C · Modelo ACSM</span></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div style="background:rgba(0,200,83,0.08); border-left:4px solid #00c853; padding:10px 15px; border-radius:4px; margin:8px 0;"><strong style="color:#00c853;">🚀 Performance Máxima ({cmp_dist_nome})</strong><br><span style="color:#b2bec3; font-size:0.85rem;">Sensação Térmica ideal: {rpt["avg_app_temp"]:.1f}°C</span></div>', unsafe_allow_html=True)
+
+                        # Extreme records
+                        st.markdown(f"<div style='color:#b2bec3; font-size:0.85rem; margin-top:8px;'>📊 Extremos históricos ({rpt['years']} anos): Máx {rpt['max_temp_hist']:.1f}°C · Mín {rpt['min_temp_hist']:.1f}°C</div>", unsafe_allow_html=True)
+
+                        # Conclusions
+                        st.markdown("**🎯 Conclusões:**")
+                        for conclusion in rpt["conclusions"]:
+                            st.markdown(f"- {conclusion}")
+
+                # Final recommendation
+                st.markdown("<br>", unsafe_allow_html=True)
+                winner = reports[best_idx]
+                rec_text = f"🏆 **Recomendação Final ({cmp_dist_nome}):** **{winner['label']}** com Score de **{winner['score']:.0f}/100**"
+                if winner.get("best_window"):
+                    rec_text += f" · Partida ideal: **{winner['best_window']}**"
+                if winner["perf_drop"] > 0:
+                    rec_text += f" · Quebra estimada: +{winner['perf_drop']:.1f}%"
+                st.success(rec_text)
 
         else:
             # Multi-city mode
@@ -1369,89 +1574,122 @@ def main():
                     compare_cities.append(selected_city)
             
             if st.button("🔄 Comparar Cidades", type="primary", use_container_width=True):
-                comp_results = []
-                with st.spinner("A recolher histórico meteorológico local para as cidades seleccionadas..."):
+                reports = []
+                with st.spinner("A analisar cenários e gerar relatório completo..."):
                     for c in compare_cities:
                         lat_c, lon_c = CITIES[c]
-                        # Fetch and append running score
                         c_df = fetch_weather_data(lat_c, lon_c, f"{year_range[0]}-01-01", f"{year_range[1]}-12-31")
                         c_df = add_scores(c_df)
-                        # Filter for the day
-                        cdata = c_df[
-                            (c_df["month"] == cm_num) & 
-                            (c_df["day"] == cd)
-                        ]
-                        
-                        if cdata.empty:
-                            comp_results.append({"Comparação": c, "Score": "-", "Chuva (%)": "-", "Temp (°C)": "-", "Sensação (°C)": "-", "Vento": "-", "Nascer Sol": "-", "Pôr Sol": "-", "Luz": "-"})
-                        else:
-                            sr_str, ss_str, dl_str = "-", "-", "-"
-                            if cdata["sunrise"].notna().any():
-                                sr_s = cdata["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                                sr_str = f"{int(sr_s // 3600):02d}:{int((sr_s % 3600) // 60):02d}"
-                                ss_s = cdata["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                                ss_str = f"{int(ss_s // 3600):02d}:{int((ss_s % 3600) // 60):02d}"
-                                dl_str = f"{cdata['daylight_hours'].mean():.1f}h"
-                            comp_results.append({
-                                "Comparação": c,
-                                "Score": f"{cdata['running_score'].mean():.0f}/100",
-                                "Chuva (%)": f"{(cdata['precipitation'] > 1).mean() * 100:.0f}%",
-                                "Temp (°C)": f"{cdata['temp_avg'].mean():.1f}",
-                                "Sensação (°C)": f"{cdata['app_temp_avg'].mean():.1f}",
-                                "Vento": f"{cdata['wind_max'].mean():.1f} km/h",
-                                "Nascer Sol": sr_str,
-                                "Pôr Sol": ss_str,
-                                "Luz": dl_str,
-                            })
+                        cdata = c_df[(c_df["month"] == cm_num) & (c_df["day"] == cd)]
+                        years_list = list(range(year_range[0], year_range[1] + 1))
+                        df_hr = fetch_hourly_specific_day(lat_c, lon_c, cm_num, cd, years_list)
+                        report = generate_scenario_report(cdata, df_hr, f"{c} ({cd}/{cm_num:02})", c, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
+                        reports.append(report)
 
-                comp_df = pd.DataFrame(comp_results)
+                # Find winner
+                valid_scores = [(i, r["score"]) for i, r in enumerate(reports) if r.get("valid")]
+                best_idx = max(valid_scores, key=lambda x: x[1])[0] if valid_scores else 0
 
-                # Find the best option
-                scores = []
-                for r in comp_results:
-                    try:
-                        scores.append(float(r["Score"].split("/")[0]))
-                    except (ValueError, AttributeError):
-                        scores.append(0)
-                best_idx = scores.index(max(scores)) if scores else 0
-
-                # Display as visual cards
-                card_cols = st.columns(len(comp_results))
-                for idx, (col, result) in enumerate(zip(card_cols, comp_results)):
+                # Display visual summary cards
+                st.markdown("##### 📊 Resumo Comparativo")
+                card_cols = st.columns(len(reports))
+                for idx, (col, rpt) in enumerate(zip(card_cols, reports)):
                     with col:
+                        if not rpt.get("valid"):
+                            st.warning("Sem dados")
+                            continue
                         is_best = idx == best_idx
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
                         score_color = "#00c853" if is_best else "#74b9ff"
                         badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR LOCAL</div>' if is_best else ""
-                        label = result["Comparação"]
-                        score_val = result["Score"]
-                        chuva = result["Chuva (%)"]
-                        temp = result["Temp (°C)"]
-                        sensacao = result["Sensação (°C)"]
-                        vento = result["Vento"]
-                        nascer = result["Nascer Sol"]
-                        por = result["Pôr Sol"]
-                        luz = result["Luz"]
+                        c_label = rpt["label"]
+                        c_score = f"{rpt['score']:.0f}"
+                        c_risk = rpt["risk_score"]
+                        c_sem_icon = "🟢" if c_risk <= 2 else ("🟡" if c_risk <= 5 else "🔴")
+                        c_sem_label = "SEGURA" if c_risk <= 2 else ("PRECAUÇÃO" if c_risk <= 5 else "CRÍTICA")
+                        c_window = rpt["best_window"] if rpt["best_window"] else "-"
+                        c_rain = f"{rpt['prob_rain']:.0f}"
+                        c_temp = f"{rpt['avg_temp']:.1f}"
+                        c_feel = f"{rpt['avg_app_temp']:.1f}"
+                        c_wind = f"{rpt['avg_wind']:.1f}"
+                        c_perf = f"{rpt['perf_drop']:.1f}"
+                        c_sunrise = rpt["sunrise"]
+                        c_sunset = rpt["sunset"]
                         st.markdown(f'''
                         <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
                             {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{label}</div>
-                            <div style="font-size: 2rem; font-weight: 800; color: {score_color}; margin: 8px 0;">{score_val}</div>
-                            <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.8;">
-                                🌧 Chuva: {chuva}<br>
-                                🌡 Temp: {temp}°C<br>
-                                🤒 Sensação: {sensacao}°C<br>
-                                💨 Vento: {vento}<br>
-                                🌅 Nascer Sol: {nascer}<br>
-                                🌇 Pôr Sol: {por}<br>
-                                ☀️ Luz: {luz}
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 8px;">{c_label}</div>
+                            <div style="font-size: 2.2rem; font-weight: 800; color: {score_color}; margin: 4px 0;">{c_score}/100</div>
+                            <div style="font-size: 0.8rem; margin: 6px 0;">{c_sem_icon} {c_sem_label}</div>
+                            <div style="font-size: 0.82rem; color: rgba(255,255,255,0.55); line-height: 1.9; margin-top: 8px;">
+                                🌧 Chuva: {c_rain}%<br>
+                                🌡 Temp: {c_temp}°C<br>
+                                🤒 Sensação: {c_feel}°C<br>
+                                💨 Vento: {c_wind} km/h<br>
+                                ⏱ Janela Ideal: {c_window}<br>
+                                📉 Quebra Perf.: +{c_perf}%<br>
+                                🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}
                             </div>
                         </div>
                         ''', unsafe_allow_html=True)
 
+                # Detailed report per city
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.success(f"🏆 **Recomendação de Local:** {comp_results[best_idx]['Comparação']} no dia {cd}/{cm_num:02} com Score de {comp_results[best_idx]['Score']}")
+                st.markdown("##### 📋 Relatório Detalhado por Cidade")
+                for idx, rpt in enumerate(reports):
+                    if not rpt.get("valid"):
+                        continue
+                    is_best = idx == best_idx
+                    trophy = " 🏆" if is_best else ""
+                    with st.expander(f"{'🏆 ' if is_best else ''}📄 {rpt['label']} — Score: {rpt['score']:.0f}/100{trophy}", expanded=is_best):
+                        risk_s = rpt["risk_score"]
+                        if risk_s <= 2:
+                            sem_c, sem_l = "#00c853", "SEGURA"
+                        elif risk_s <= 5:
+                            sem_c, sem_l = "#ff9800", "PRECAUÇÃO"
+                        else:
+                            sem_c, sem_l = "#d32f2f", "CRÍTICA"
+                        st.markdown(f'<div style="background:{sem_c}15; border-left:4px solid {sem_c}; padding:10px 15px; border-radius:4px; margin-bottom:12px;"><strong style="color:{sem_c};">🚦 Data {sem_l}</strong> — Índice de Risco: {risk_s}/9</div>', unsafe_allow_html=True)
+
+                        mc1, mc2, mc3, mc4 = st.columns(4)
+                        mc1.metric("Score", f"{rpt['score']:.0f}/100")
+                        mc2.metric("Chuva >1mm", f"{rpt['prob_rain']:.0f}%")
+                        mc3.metric("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
+                        mc4.metric("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
+
+                        if rpt["best_window"]:
+                            st.markdown(f'''
+                            <div style="background:rgba(0,200,83,0.08); border-left:4px solid #00c853; padding:10px 15px; border-radius:4px; margin:8px 0;">
+                                <strong style="color:#00c853;">⏱️ Janela Ideal de Partida: {rpt["best_window"]}</strong><br>
+                                <span style="color:#b2bec3; font-size:0.85rem;">
+                                    Melhor hora: Score {rpt["best_hour_score"]:.0f}/100 · 
+                                    Evitar {rpt["worst_hour"]:02d}:00 (Score: {rpt["worst_hour_score"]:.0f}/100)
+                                </span>
+                            </div>
+                            ''', unsafe_allow_html=True)
+
+                        if rpt["perf_drop"] > 0:
+                            perf_color = "#d32f2f" if rpt["perf_drop"] > 5 else "#ff9800"
+                            st.markdown(f'<div style="background:{perf_color}15; border-left:4px solid {perf_color}; padding:10px 15px; border-radius:4px; margin:8px 0;"><strong style="color:{perf_color};">📉 Quebra de Performance ({cmp_dist_nome}): +{rpt["perf_drop"]:.1f}%</strong><br><span style="color:#b2bec3; font-size:0.85rem;">Sensação Térmica: {rpt["avg_app_temp"]:.1f}°C · Modelo ACSM</span></div>', unsafe_allow_html=True)
+                        else:
+                            st.markdown(f'<div style="background:rgba(0,200,83,0.08); border-left:4px solid #00c853; padding:10px 15px; border-radius:4px; margin:8px 0;"><strong style="color:#00c853;">🚀 Performance Máxima ({cmp_dist_nome})</strong><br><span style="color:#b2bec3; font-size:0.85rem;">Sensação Térmica ideal: {rpt["avg_app_temp"]:.1f}°C</span></div>', unsafe_allow_html=True)
+
+                        st.markdown(f"<div style='color:#b2bec3; font-size:0.85rem; margin-top:8px;'>📊 Extremos históricos ({rpt['years']} anos): Máx {rpt['max_temp_hist']:.1f}°C · Mín {rpt['min_temp_hist']:.1f}°C</div>", unsafe_allow_html=True)
+
+                        st.markdown("**🎯 Conclusões:**")
+                        for conclusion in rpt["conclusions"]:
+                            st.markdown(f"- {conclusion}")
+
+                # Final recommendation
+                st.markdown("<br>", unsafe_allow_html=True)
+                winner = reports[best_idx]
+                rec_text = f"🏆 **Recomendação Final ({cmp_dist_nome}):** **{winner['label']}** com Score de **{winner['score']:.0f}/100**"
+                if winner.get("best_window"):
+                    rec_text += f" · Partida ideal: **{winner['best_window']}**"
+                if winner["perf_drop"] > 0:
+                    rec_text += f" · Quebra estimada: +{winner['perf_drop']:.1f}%"
+                st.success(rec_text)
 
     with tab_data:
         # ── CSV Export ────────────────────────────
