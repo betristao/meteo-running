@@ -1992,12 +1992,34 @@ def main():
                                     
                             # Determine coordinate anchor and fetch matching weather hour conditions
                             s_lat, s_lon = route_data[0]["lat"], route_data[0]["lon"]
-                            years_list = list(range(year_range[0], year_range[1] + 1))
-                            df_hr = fetch_hourly_specific_day(s_lat, s_lon, gpx_m_num, gpx_day, years_list)
                             
-                            if df_hr is not None and not df_hr.empty:
-                                # Average across all years for hourly profiles
-                                df_g = df_hr.groupby("hour").mean(numeric_only=True).reset_index()
+                            # Forecast check for GPX
+                            today = date.today()
+                            try:
+                                target_dt = date(today.year, gpx_m_num, gpx_day)
+                                if target_dt < today:
+                                    target_dt = date(today.year + 1, gpx_m_num, gpx_day)
+                                days_diff = (target_dt - today).days
+                                is_f_active = 0 <= days_diff <= 13
+                            except: is_f_active = False
+
+                            if is_f_active:
+                                with st.spinner("Acedendo a previsões de satélite para o percurso..."):
+                                    df_d_f, df_h_f = fetch_forecast_data(s_lat, s_lon)
+                                    df_g = df_h_f[df_h_f["time"].dt.date == target_dt].copy()
+                            else:
+                                with st.spinner("A modelar o vento histórico para todo o traçado GPX..."):
+                                    years_list = list(range(year_range[0], year_range[1] + 1))
+                                    df_hr = fetch_hourly_specific_day(s_lat, s_lon, gpx_m_num, gpx_day, years_list)
+                                    if not df_hr.empty:
+                                        df_g = df_hr.groupby("hour").mean(numeric_only=True).reset_index()
+                                    else:
+                                        df_g = pd.DataFrame()
+
+                            if not df_g.empty:
+                                data_source_name = "Previsão Real" if is_f_active else "Média Histórica"
+                                if is_f_active:
+                                    st.info(f"✨ **Modo Forecast Ativo:** A usar previsões reais de vento para o dia {target_dt.strftime('%d/%m')}.")
                                 
                                 segments_mapped = []
                                 for pt in route_data:
@@ -2029,29 +2051,29 @@ def main():
                                     
                                 df_route = pd.DataFrame(segments_mapped)
                                 
-                                st.markdown("##### 📍 Impacto do Vento Mapeado")
+                                st.markdown(f"##### 📍 Impacto do Vento Mapeado ({data_source_name})")
                                 fig_map = px.scatter_mapbox(
                                     df_route, lat="lat", lon="lon", color="wind_eff",
                                     color_discrete_map={"🔴 Contra (Headwind)": "red", "🟢 A favor (Tailwind)": "green", "🟡 Lateral (Crosswind)": "yellow"},
                                     size_max=8, zoom=11.5, mapbox_style="carto-positron",
                                     hover_data={"lat": False, "lon": False, "km": ':.1f', "wind_speed": ':.1f', "wind_eff": True},
-                                    labels={"wind_eff": "Impacto", "wind_speed": "Veloc. Histórica (km/h)", "km": "Km"}
+                                    labels={"wind_eff": "Impacto", "wind_speed": f"Veloc. {data_source_name} (km/h)", "km": "Km"}
                                 )
                                 fig_map.update_traces(marker=dict(size=6))
                                 st.plotly_chart(fig_map, use_container_width=True)
                                 
-                                st.markdown("##### 📈 Desgaste Projetado (Wind Speed vs Kms)")
+                                st.markdown(f"##### 📈 Desgaste Projetado ({data_source_name})")
                                 fig_bar = px.scatter(
                                     df_route, x="km", y="wind_speed", color="wind_eff",
                                     color_discrete_map={"🔴 Contra (Headwind)": "red", "🟢 A favor (Tailwind)": "green", "🟡 Lateral (Crosswind)": "yellow"},
-                                    labels={"km": "Quilómetro da Prova", "wind_speed": "Velocidade do Vento (km/h)", "wind_eff": "Atrito"},
-                                    title="Distribuição do Risco Aerodinâmico e Intensidade ao longo da Prova"
+                                    labels={"km": "Quilómetro da Prova", "wind_speed": f"Velocidade do Vento ({data_source_name}) (km/h)", "wind_eff": "Atrito"},
+                                    title=f"Distribuição do Risco Aerodinâmico ({data_source_name}) ao longo da Prova"
                                 )
                                 # Ensure markers are big enough in scatter
                                 fig_bar.update_traces(mode='markers', marker=dict(size=7))
                                 st.plotly_chart(fig_bar, use_container_width=True)
                             else:
-                                st.warning("Não foi possível aceder ao histórico de Vento para esta Data e Zona.")
+                                st.warning("Não foi possível aceder aos dados de Vento para esta Data e Zona.")
                 except Exception as e:
                     st.error(f"Erro ao analisar GPX: {str(e)}")
 
