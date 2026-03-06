@@ -225,6 +225,50 @@ def add_scores(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────
+# GPX HELPERS
+# ──────────────────────────────────────────────
+import xml.etree.ElementTree as ET
+import math
+
+def parse_gpx(xml_string):
+    try:
+        root = ET.fromstring(xml_string)
+    except Exception:
+        return []
+    points = []
+    # match any namespace
+    for trkpt in root.iter():
+        if 'trkpt' in trkpt.tag:
+            try:
+                lat = float(trkpt.get('lat'))
+                lon = float(trkpt.get('lon'))
+                ele_el = list(trkpt.iter())
+                ele = 0.0
+                for e in ele_el:
+                    if 'ele' in e.tag and e.text:
+                        ele = float(e.text)
+                points.append((lat, lon, ele))
+            except Exception:
+                pass
+    return points
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371.0
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    return R * (2 * math.asin(math.sqrt(a)))
+
+def calculate_bearing(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+    dlon = lon2 - lon1
+    x = math.sin(dlon) * math.cos(lat2)
+    y = math.cos(lat1) * math.sin(lat2) - (math.sin(lat1) * math.cos(lat2) * math.cos(dlon))
+    initial_bearing = math.atan2(x, y)
+    return (math.degrees(initial_bearing) + 360) % 360
+
+# ──────────────────────────────────────────────
 # KPI HELPERS
 # ──────────────────────────────────────────────
 
@@ -586,11 +630,12 @@ def main():
         return
 
     # ── TABS DE NAVEGAÇÃO ────────────────────
-    tab_dash, tab_best, tab_specific, tab_compare, tab_faq, tab_data = st.tabs([
+    tab_dash, tab_best, tab_specific, tab_compare, tab_gpx, tab_faq, tab_data = st.tabs([
         "📊 Dashboard Geral", 
         "🏆 Melhores Datas", 
         "🔍 Análise Específica", 
         "⚖️ Comparador", 
+        "🧭 Análise GPX",
         "❓ FAQs / Metodologia",
         "💾 Dados"
     ])
@@ -1773,6 +1818,120 @@ def main():
                         mime="application/pdf",
                         use_container_width=True
                     )
+
+    with tab_gpx:
+        st.markdown('<div class="section-header">🧭 Análise de Percurso (GPX)</div>', unsafe_allow_html=True)
+        st.markdown('''
+        Carregue o traçado da sua prova (ficheiro `.gpx`) e indique os detalhes do evento. O sistema vai extrair a média histórica 
+        das condições de vento para a data e cruzá-las com a direção real de cada trecho da prova, quilómetro a quilómetro!
+        ''')
+        
+        gpx_col, _ = st.columns([1, 1])
+        with gpx_col:
+            gpx_file = st.file_uploader("Ficheiro GPX", type=["gpx"], key="gpx_uploader")
+            
+        gcol1, gcol2, gcol3, gcol4 = st.columns(4)
+        with gcol1:
+            gpx_month = st.selectbox("Mês da Prova", list(MONTH_NAMES_PT.values()), key="gpx_month", index=9)
+            gpx_m_num = name_to_num[gpx_month]
+        with gcol2:
+            sd_m = pd.to_datetime(f"2024-{gpx_m_num:02}-01")
+            gpx_day = st.number_input("Dia da Prova", min_value=1, max_value=sd_m.days_in_month, value=min(15, sd_m.days_in_month), key="gpx_day")
+        with gcol3:
+            gpx_start_hour = st.number_input("Hora de Partida", min_value=0, max_value=23, value=8, key="gpx_hour")
+        with gcol4:
+            gpx_pace = st.number_input("Ritmo (min/km)", min_value=2.0, max_value=20.0, value=5.5, step=0.1, key="gpx_pace")
+            
+        if st.button("🗺️ Analisar Aerodinâmica do Percurso", type="primary", use_container_width=True):
+            if gpx_file is None:
+                st.error("Por favor, faça upload de um ficheiro GPX primeiro.")
+            else:
+                try:
+                    gpx_str = gpx_file.getvalue().decode("utf-8")
+                    pts = parse_gpx(gpx_str)
+                    if not pts:
+                        st.error("Não foi possível extrair pontos deste ficheiro GPX. Verifique a sua formatação.")
+                    else:
+                        with st.spinner("A modelar o vento histórico para todo o traçado GPX..."):
+                            # Filter and downsample track for performance (1 segment per ~100m)
+                            route_data = []
+                            accum_d = 0.0
+                            last_lat, last_lon, last_ele = pts[0]
+                            route_data.append({"lat": last_lat, "lon": last_lon, "km": 0.0, "bearing": 0})
+                            
+                            for lat, lon, ele in pts[1:]:
+                                d = haversine(last_lat, last_lon, lat, lon)
+                                if d >= 0.1: # Save one point every ~100 meters
+                                    b = calculate_bearing(last_lat, last_lon, lat, lon)
+                                    accum_d += d
+                                    route_data.append({"lat": lat, "lon": lon, "km": accum_d, "bearing": b})
+                                    last_lat, last_lon, last_ele = lat, lon, ele
+                                    
+                            # Determine coordinate anchor and fetch matching weather hour conditions
+                            s_lat, s_lon = route_data[0]["lat"], route_data[0]["lon"]
+                            years_list = list(range(year_range[0], year_range[1] + 1))
+                            df_hr = fetch_hourly_specific_day(s_lat, s_lon, gpx_m_num, gpx_day, years_list)
+                            
+                            if df_hr is not None and not df_hr.empty:
+                                # Average across all years for hourly profiles
+                                df_g = df_hr.groupby("hour").mean(numeric_only=True).reset_index()
+                                
+                                segments_mapped = []
+                                for pt in route_data:
+                                    elapsed_min = pt["km"] * gpx_pace
+                                    # Adjust expected hour based on running time
+                                    run_hour = int(gpx_start_hour + (elapsed_min // 60)) % 24
+                                    
+                                    hr_data = df_g[df_g["hour"] == run_hour]
+                                    if not hr_data.empty:
+                                        w_dir = hr_data["wind_direction_10m"].values[0]
+                                        w_speed = hr_data["wind_speed_10m"].values[0]
+                                    else:
+                                        w_dir = 0; w_speed = 0
+                                        
+                                    diff = abs(w_dir - pt["bearing"])
+                                    if diff > 180: diff = 360 - diff
+                                    
+                                    # Determine actual effect on runner body vs relative wind
+                                    if diff <= 60:
+                                        effect = "🔴 Contra (Headwind)"
+                                    elif diff >= 120:
+                                        effect = "🟢 A favor (Tailwind)"
+                                    else:
+                                        effect = "🟡 Lateral (Crosswind)"
+                                        
+                                    pt["wind_eff"] = effect
+                                    pt["wind_speed"] = round(w_speed, 1)
+                                    segments_mapped.append(pt)
+                                    
+                                df_route = pd.DataFrame(segments_mapped)
+                                
+                                st.markdown("##### 📍 Impacto do Vento Mapeado")
+                                fig_map = px.scatter_mapbox(
+                                    df_route, lat="lat", lon="lon", color="wind_eff",
+                                    color_discrete_map={"🔴 Contra (Headwind)": "red", "🟢 A favor (Tailwind)": "green", "🟡 Lateral (Crosswind)": "yellow"},
+                                    size_max=8, zoom=11.5, mapbox_style="carto-positron",
+                                    hover_data={"lat": False, "lon": False, "km": ':.1f', "wind_speed": ':.1f', "wind_eff": True},
+                                    labels={"wind_eff": "Impacto", "wind_speed": "Veloc. Histórica (km/h)", "km": "Km"}
+                                )
+                                fig_map.update_traces(marker=dict(size=6))
+                                st.plotly_chart(fig_map, use_container_width=True)
+                                
+                                st.markdown("##### 📈 Desgaste Projetado (Wind Speed vs Kms)")
+                                fig_bar = px.scatter(
+                                    df_route, x="km", y="wind_speed", color="wind_eff",
+                                    color_discrete_map={"🔴 Contra (Headwind)": "red", "🟢 A favor (Tailwind)": "green", "🟡 Lateral (Crosswind)": "yellow"},
+                                    labels={"km": "Quilómetro da Prova", "wind_speed": "Velocidade do Vento (km/h)", "wind_eff": "Atrito"},
+                                    title="Distribuição do Risco Aerodinâmico e Intensidade ao longo da Prova"
+                                )
+                                # Ensure markers are big enough in scatter
+                                fig_bar.update_traces(mode='markers', marker=dict(size=7))
+                                st.plotly_chart(fig_bar, use_container_width=True)
+                            else:
+                                st.warning("Não foi possível aceder ao histórico de Vento para esta Data e Zona.")
+                except Exception as e:
+                    st.error(f"Erro ao analisar GPX: {str(e)}")
+
 
     with tab_faq:
         st.markdown('<div class="section-header">❓ FAQs & Metodologia</div>', unsafe_allow_html=True)
