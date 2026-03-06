@@ -1474,7 +1474,7 @@ def main():
                     pdf.multi_cell(0, 6, sanitize(f"- {conc}"), new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(5)
                 
-            return pdf.output()
+            return bytes(pdf.output())
 
         if "Datas" in compare_mode:
             num_dates = st.radio("Quantas datas comparar?", [2, 3], horizontal=True, key="num_compare_dates")
