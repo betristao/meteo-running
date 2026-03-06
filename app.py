@@ -1307,7 +1307,7 @@ def main():
                     df_race_hours["hr_score"] = df_race_hours.apply(compute_hourly_score, axis=1)
                     avg_score = df_race_hours["hr_score"].mean()
                     # Probability of rain during these specific hours
-                    prob_rain = (df_race_hours["precipitation"] > 0).groupby(df_race_hours["date"].dt.date).any().mean() * 100
+                    prob_rain = (df_race_hours["precipitation"] > 0).groupby(df_race_hours["time"].dt.date).any().mean() * 100
                     avg_temp = df_race_hours["temperature_2m"].mean()
                     avg_app_temp = df_race_hours["apparent_temperature"].mean()
                     avg_wind = df_race_hours["wind_speed_10m"].mean()
