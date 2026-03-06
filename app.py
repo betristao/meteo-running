@@ -623,7 +623,7 @@ CUSTOM_CSS = """
 
 def main():
     st.set_page_config(
-        page_title="Meteo Running Portugal 🌤️",
+        page_title="🌤️ Meteo Running 🏃",
         page_icon="🏃",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -633,7 +633,7 @@ def main():
 
     # ── Sidebar ──────────────────────────────
     with st.sidebar:
-        st.markdown("## 🌤️ 🏃 Meteo Running")
+        st.markdown("## 🌤️ Meteo Running 🏃")
         st.markdown('<p style="color:rgba(250,250,250,0.5); font-size:0.85rem; margin-top:-0.5rem;">Decisão baseada em dados meteorológicos</p>', unsafe_allow_html=True)
         st.divider()
 
@@ -674,7 +674,7 @@ def main():
     # ── Header ───────────────────────────────
     col_title, col_badge = st.columns([4, 1])
     with col_title:
-        st.markdown(f"# 🌤️ 🏃 Meteo Running — {city}")
+        st.markdown(f"# 🌤️ Meteo Running 🏃 — {city}")
         st.markdown(
             f'<p style="color:rgba(250,250,250,0.5); margin-top:-1rem;">'
             f'Análise meteorológica {year_range[0]}–{year_range[1]} · '
