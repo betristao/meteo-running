@@ -1459,7 +1459,7 @@ def main():
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
                         score_color = "#00c853" if is_best else "#74b9ff"
-                        badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR OPÇÃO</div>' if is_best else ""
+                        badge = '<div style="background:#00c853;color:#fff;padding:3px 12px;border-radius:12px;font-size:0.75rem;font-weight:700;display:inline-block;margin-bottom:8px;">🏆 MELHOR OPÇÃO</div>' if is_best else ""
                         c_label = rpt["label"]
                         c_score = f"{rpt['score']:.0f}"
                         c_risk = rpt["risk_score"]
@@ -1473,23 +1473,23 @@ def main():
                         c_perf = f"{rpt['perf_drop']:.1f}"
                         c_sunrise = rpt["sunrise"]
                         c_sunset = rpt["sunset"]
-                        st.markdown(f'''
-                        <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
-                            {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 8px;">{c_label}</div>
-                            <div style="font-size: 2.2rem; font-weight: 800; color: {score_color}; margin: 4px 0;">{c_score}/100</div>
-                            <div style="font-size: 0.8rem; margin: 6px 0;">{c_sem_icon} {c_sem_label}</div>
-                            <div style="font-size: 0.82rem; color: rgba(255,255,255,0.55); line-height: 1.9; margin-top: 8px;">
-                                🌧 Chuva: {c_rain}%<br>
-                                🌡 Temp: {c_temp}°C<br>
-                                🤒 Sensação: {c_feel}°C<br>
-                                💨 Vento: {c_wind} km/h<br>
-                                ⏱ Janela Ideal: {c_window}<br>
-                                📉 Quebra Perf.: +{c_perf}%<br>
-                                🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
+                        card_html = (
+                            f'<div style="background:{bg};border:2px solid {border_color};border-radius:12px;padding:18px;text-align:center;">'
+                            f'{badge}'
+                            f'<div style="font-size:1.05rem;font-weight:700;color:#dfe6e9;margin-bottom:8px;">{c_label}</div>'
+                            f'<div style="font-size:2.2rem;font-weight:800;color:{score_color};margin:4px 0;">{c_score}/100</div>'
+                            f'<div style="font-size:0.8rem;margin:6px 0;">{c_sem_icon} {c_sem_label}</div>'
+                            f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.9;margin-top:8px;">'
+                            f'🌧 Chuva: {c_rain}%<br>'
+                            f'🌡 Temp: {c_temp}°C<br>'
+                            f'🤒 Sensação: {c_feel}°C<br>'
+                            f'💨 Vento: {c_wind} km/h<br>'
+                            f'⏱ Janela Ideal: {c_window}<br>'
+                            f'📉 Quebra Perf.: +{c_perf}%<br>'
+                            f'🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}'
+                            f'</div></div>'
+                        )
+                        st.markdown(card_html, unsafe_allow_html=True)
 
                 # Detailed report per scenario
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1602,7 +1602,7 @@ def main():
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
                         score_color = "#00c853" if is_best else "#74b9ff"
-                        badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR LOCAL</div>' if is_best else ""
+                        badge = '<div style="background:#00c853;color:#fff;padding:3px 12px;border-radius:12px;font-size:0.75rem;font-weight:700;display:inline-block;margin-bottom:8px;">🏆 MELHOR LOCAL</div>' if is_best else ""
                         c_label = rpt["label"]
                         c_score = f"{rpt['score']:.0f}"
                         c_risk = rpt["risk_score"]
@@ -1616,23 +1616,23 @@ def main():
                         c_perf = f"{rpt['perf_drop']:.1f}"
                         c_sunrise = rpt["sunrise"]
                         c_sunset = rpt["sunset"]
-                        st.markdown(f'''
-                        <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
-                            {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 8px;">{c_label}</div>
-                            <div style="font-size: 2.2rem; font-weight: 800; color: {score_color}; margin: 4px 0;">{c_score}/100</div>
-                            <div style="font-size: 0.8rem; margin: 6px 0;">{c_sem_icon} {c_sem_label}</div>
-                            <div style="font-size: 0.82rem; color: rgba(255,255,255,0.55); line-height: 1.9; margin-top: 8px;">
-                                🌧 Chuva: {c_rain}%<br>
-                                🌡 Temp: {c_temp}°C<br>
-                                🤒 Sensação: {c_feel}°C<br>
-                                💨 Vento: {c_wind} km/h<br>
-                                ⏱ Janela Ideal: {c_window}<br>
-                                📉 Quebra Perf.: +{c_perf}%<br>
-                                🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
+                        card_html = (
+                            f'<div style="background:{bg};border:2px solid {border_color};border-radius:12px;padding:18px;text-align:center;">'
+                            f'{badge}'
+                            f'<div style="font-size:1.05rem;font-weight:700;color:#dfe6e9;margin-bottom:8px;">{c_label}</div>'
+                            f'<div style="font-size:2.2rem;font-weight:800;color:{score_color};margin:4px 0;">{c_score}/100</div>'
+                            f'<div style="font-size:0.8rem;margin:6px 0;">{c_sem_icon} {c_sem_label}</div>'
+                            f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.9;margin-top:8px;">'
+                            f'🌧 Chuva: {c_rain}%<br>'
+                            f'🌡 Temp: {c_temp}°C<br>'
+                            f'🤒 Sensação: {c_feel}°C<br>'
+                            f'💨 Vento: {c_wind} km/h<br>'
+                            f'⏱ Janela Ideal: {c_window}<br>'
+                            f'📉 Quebra Perf.: +{c_perf}%<br>'
+                            f'🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}'
+                            f'</div></div>'
+                        )
+                        st.markdown(card_html, unsafe_allow_html=True)
 
                 # Detailed report per city
                 st.markdown("<br>", unsafe_allow_html=True)
