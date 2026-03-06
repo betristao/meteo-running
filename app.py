@@ -670,7 +670,7 @@ def main():
         "🏆 Melhores Datas", 
         "🔍 Análise Específica", 
         "⚖️ Comparador", 
-        "🧭 Análise GPX",
+        "🧭 Análise GPX, Kmz",
         "❓ FAQs / Metodologia",
         "💾 Dados"
     ])
@@ -1855,7 +1855,7 @@ def main():
                     )
 
     with tab_gpx:
-        st.markdown('<div class="section-header">🧭 Análise de Percurso</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">🧭 Análise GPX, Kmz</div>', unsafe_allow_html=True)
         st.markdown('''
         Carregue o traçado da sua prova (ficheiros `.gpx`, `.kml` ou `.kmz`) e indique os detalhes do evento. O sistema vai extrair a média histórica 
         das condições de vento para a data e cruzá-las com a direção real de cada trecho da prova, quilómetro a quilómetro!
