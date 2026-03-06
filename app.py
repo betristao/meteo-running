@@ -1471,7 +1471,7 @@ def main():
                 pdf.cell(0, 8, "Conclusoes:", ln=True)
                 pdf.set_font("Helvetica", size=11)
                 for conc in rpt["conclusions"]:
-                    pdf.multi_cell(0, 6, sanitize(f"- {conc}"))
+                    pdf.multi_cell(0, 6, sanitize(f"- {conc}"), new_x="LMARGIN", new_y="NEXT")
                 pdf.ln(5)
                 
             return pdf.output()
