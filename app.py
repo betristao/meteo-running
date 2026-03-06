@@ -517,8 +517,8 @@ def main():
 
         year_range = st.slider(
             "Intervalo de Anos",
-            min_value=2016, max_value=2024,
-            value=(2016, 2024),
+            min_value=2016, max_value=2026,
+            value=(2016, 2026),
         )
 
         all_months = list(MONTH_NAMES_PT.values())
