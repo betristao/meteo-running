@@ -515,8 +515,8 @@ def main():
 
         year_range = st.slider(
             "Intervalo de Anos",
-            min_value=2016, max_value=2026,
-            value=(2016, 2026),
+            min_value=2016, max_value=2024,
+            value=(2016, 2024),
         )
 
         all_months = list(MONTH_NAMES_PT.values())
@@ -561,7 +561,11 @@ def main():
     # ── Fetch data ───────────────────────────
     lat, lon = CITIES[city]
     start_date = f"{year_range[0]}-01-01"
-    end_date = f"{min(year_range[1], 2026)}-03-06"  # Up to today
+    # Dynamic end date: use today's date but cap to avoid requesting future data
+    from datetime import date as dt_date
+    today = dt_date.today()
+    end_year = min(year_range[1], today.year)
+    end_date = today.strftime("%Y-%m-%d") if end_year == today.year else f"{end_year}-12-31"
 
     with st.spinner("A carregar dados meteorológicos…"):
         try:
