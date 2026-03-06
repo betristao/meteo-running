@@ -586,11 +586,12 @@ def main():
         return
 
     # ── TABS DE NAVEGAÇÃO ────────────────────
-    tab_dash, tab_best, tab_specific, tab_compare, tab_data = st.tabs([
+    tab_dash, tab_best, tab_specific, tab_compare, tab_faq, tab_data = st.tabs([
         "📊 Dashboard Geral", 
         "🏆 Melhores Datas", 
         "🔍 Análise Específica", 
         "⚖️ Comparador", 
+        "❓ FAQs / Metodologia",
         "💾 Dados"
     ])
 
@@ -1772,6 +1773,36 @@ def main():
                         mime="application/pdf",
                         use_container_width=True
                     )
+
+    with tab_faq:
+        st.markdown('<div class="section-header">❓ FAQs & Metodologia</div>', unsafe_allow_html=True)
+        
+        st.markdown('''
+        ### 1. De onde provêm os dados meteorológicos?
+        A aplicação recorre aos dados da Open-Meteo API, suportados pelo modelo histórico "ERA5 Reanalysis" criado pelo ECMWF (Centro Europeu de Previsões Meteorológicas a Médio Prazo). Este é um dos arquivos climáticos de maior precisão a nível global, permitindo resgatar o estado exato da atmosfera a cada hora desde há dezenas de anos.
+
+        ### 2. Como é calculado o "Score Geral" (0/100)?
+        O **Running Score** é um sistema de pontuação baseado em penalizações, desenhado em torno do corredor. Assume condições "perfeitas" para uma corrida rápida e confortável (temperatura nos 10°C, zero vento e zero chuva). O score vai descendo drasticamente à medida que se apresentam:
+        - Temperaturas acima de 15°C ou abaixo de 5°C;
+        - Níveis elevados de humidade ou de sensação térmica (devido à incapacidade de dissipação de calor humano);
+        - Velocidade de ventos crescentes e volumes acentuados de precipitação.
+
+        ### 3. Como estimam a "Quebra de Performance"?
+        Utilizamos as premissas fisiológicas traçadas pelo ACSM (*American College of Sports Medicine*). A lógica central observa a temperatura média aparente/sensação térmica na hora do evento:
+        - Se ultrapassar os ~15°C, desencadeia um multiplicador decrescente de tempo na corrida.
+        - Este impacto agrava-se com base na distância da prova introduzida (ex: aos 20ºC previstos, uma Maratona tem um multiplicador e perda muito superior ao de uma prova de 10K devido ao esforço estendido e fadiga térmica). 
+
+        ### 4. O que define o "Índice de Risco"?
+        É uma segunda linha de segurança, independente de performance. Baseia-se em fatores não suportáveis num evento: 
+        - Temperaturas extremas (abaixo de 2ºC ou acima de 28ºC).
+        - Alta probabilidade de chuva, superior a 1mm.
+        - Ventos muito fortes superiores a 30 km/h.
+        
+        Dependendo da força destes elementos, é alocado um risco de 0 a 9 (Seguro, Precaução ou Crítico) alertando por exemplo os organizadores para prepararem estruturas pesadas e abrigos caso seja Severo.
+
+        ### 5. Porque pedem o ângulo e traçado da prova (C/Vento)?
+        As provas de corrida são frequentemente afetadas pela força "headwind" (vento de frente). Comparando o rumo/traçado habitual do evento que apontaste (ex: rumo a Sul, 180º graus) e calculando a direção real do vento previsto para a referida hora nessa localidade, conseguimos alertar-te quando os dois embatem de frente de forma mais analítica.
+        ''')
 
     with tab_data:
         # ── CSV Export ────────────────────────────
