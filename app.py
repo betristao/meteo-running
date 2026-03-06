@@ -129,12 +129,18 @@ def fetch_forecast_data(lat: float, lon: float) -> pd.DataFrame:
         "precipitation":  daily["precipitation_sum"],
         "wind_max":       daily["wind_speed_10m_max"]
     })
+    df_daily["year"] = df_daily["date"].dt.year
+    df_daily["month"] = df_daily["date"].dt.month
+    df_daily["day"] = df_daily["date"].dt.day
     
     # Process Hourly
     hourly = data["hourly"]
     df_hourly = pd.DataFrame(hourly)
     df_hourly["time"] = pd.to_datetime(df_hourly["time"])
     df_hourly["hour"] = df_hourly["time"].dt.hour
+    df_hourly["year"] = df_hourly["time"].dt.year
+    df_hourly["month"] = df_hourly["time"].dt.month
+    df_hourly["day"] = df_hourly["time"].dt.day
     
     return df_daily, df_hourly
 
@@ -1400,9 +1406,9 @@ def main():
         compare_mode = st.radio("Modo de Comparação:", ["Múltiplas Datas (Mesma Cidade)", "Múltiplas Cidades (Mesma Data)"], horizontal=True, key="comp_mode")
 
         # Helper function to generate report for a scenario
-        def generate_scenario_report(cdata_daily, df_hourly, label, city_name, dist_km, dist_nome, hora_partida, duracao, dir_graus, dir_nome):
+        def generate_scenario_report(cdata_daily, df_hourly, label, city_name, dist_km, dist_nome, hora_partida, duracao, dir_graus, dir_nome, is_forecast=False):
             """Generate a detailed report dict for a comparison scenario."""
-            report = {"label": label, "city": city_name}
+            report = {"label": label, "city": city_name, "is_forecast": is_forecast}
 
             if cdata_daily.empty:
                 report["valid"] = False
@@ -1410,11 +1416,10 @@ def main():
             report["valid"] = True
             
             # Check if it's forecast or history
-            is_forecast = report.get("is_forecast", False)
             report["data_type"] = "Previsão Real (Forecast)" if is_forecast else "Média Histórica (30 anos)"
 
             # Basic daily stats (fallback)
-            years_count = cdata_daily["year"].nunique()
+            years_count = cdata_daily["year"].nunique() if not is_forecast else 1
             avg_score_daily = cdata_daily["running_score"].mean()
             prob_rain = (cdata_daily["precipitation"] > 1).mean() * 100
             avg_temp = cdata_daily["temp_avg"].mean()
@@ -1639,8 +1644,7 @@ def main():
                             years_list = list(range(year_range[0], year_range[1] + 1))
                             df_hr = fetch_hourly_specific_day(lat, lon, month_n, day_n, years_list)
                         
-                        report = generate_scenario_report(cdata, df_hr, f"{label} ({city})", city, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
-                        report["is_forecast"] = is_f_active
+                        report = generate_scenario_report(cdata, df_hr, f"{label} ({city})", city, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome, is_forecast=is_f_active)
                         reports.append(report)
 
                 # Find winner
@@ -1810,8 +1814,7 @@ def main():
                             years_list = list(range(year_range[0], year_range[1] + 1))
                             df_hr = fetch_hourly_specific_day(lat_c, lon_c, cm_num, cd, years_list)
                         
-                        report = generate_scenario_report(cdata, df_hr, f"{c} ({cd}/{cm_num:02})", c, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
-                        report["is_forecast"] = is_f_active
+                        report = generate_scenario_report(cdata, df_hr, f"{c} ({cd}/{cm_num:02})", c, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome, is_forecast=is_f_active)
                         reports.append(report)
 
                 # Find winner
