@@ -1,5 +1,5 @@
 """
-Weather Decision Support System — Portugal Running
+Weatherun — Weather Decision Support System
 Análise de histórico meteorológico (2016-2026) para escolha de datas de eventos de running.
 Fonte: Open-Meteo Historical Weather API (ERA5).
 """
@@ -623,7 +623,7 @@ CUSTOM_CSS = """
 
 def main():
     st.set_page_config(
-        page_title="🌤️ Meteo Running 🏃",
+        page_title="🌤️ Weatherun 🏃",
         page_icon="🏃",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -633,7 +633,7 @@ def main():
 
     # ── Sidebar ──────────────────────────────
     with st.sidebar:
-        st.markdown("## 🌤️ Meteo Running 🏃")
+        st.markdown("## 🌤️ Weatherun 🏃")
         st.markdown('<p style="color:rgba(250,250,250,0.5); font-size:0.85rem; margin-top:-0.5rem;">Decisão baseada em dados meteorológicos</p>', unsafe_allow_html=True)
         st.divider()
 
@@ -667,14 +667,14 @@ def main():
         st.divider()
         st.markdown(
             '<p style="color:rgba(250,250,250,0.3); font-size:0.72rem;">'
-            'Powered by Open-Meteo ERA5<br>© 2026 Meteo Running</p>',
+            'Powered by Open-Meteo ERA5<br>© 2026 Weatherun</p>',
             unsafe_allow_html=True,
         )
 
     # ── Header ───────────────────────────────
     col_title, col_badge = st.columns([4, 1])
     with col_title:
-        st.markdown(f"# 🌤️ Meteo Running 🏃 — {city}")
+        st.markdown(f"# 🌤️ Weatherun 🏃 — {city}")
         st.markdown(
             f'<p style="color:rgba(250,250,250,0.5); margin-top:-1rem;">'
             f'Análise meteorológica {year_range[0]}–{year_range[1]} · '
@@ -1119,7 +1119,7 @@ def main():
             
                 risk_level = "Baixo" if prob_rain < 20 else ("Moderado" if prob_rain < 40 else "Alto")
                 exec_text = (
-                    f"**Meteo Running Pro - Dossier Técnico**\n"
+                    f"**Weatherun Pro - Dossier Técnico**\n"
                     f"**Data da Prova:** {race_day} de {race_month_name} \n**Local:** {city}\n\n"
                     f"Com base em {years_count} anos de dados (ERA5 / Open-Meteo), a data apresenta um Running Score Diário de **{avg_score:.0f}/100**. "
                     f"A probabilidade de chuva (>1mm) é de **{prob_rain:.1f}%** (risco {risk_level.lower()}). "
@@ -1833,7 +1833,7 @@ def main():
                 st.success(rec_text)
                 
                 if any(r.get("valid") for r in reports):
-                    pdf_bytes = create_pdf_report(reports, "Comparacao de Datas - Meteo Running Pro")
+                    pdf_bytes = create_pdf_report(reports, "Comparação de Datas - Weatherun Pro")
                     st.download_button(
                         label="📄 Exportar Relatório PDF",
                         data=pdf_bytes,
@@ -2002,7 +2002,7 @@ def main():
                 st.success(rec_text)
 
                 if any(r.get("valid") for r in reports):
-                    pdf_bytes = create_pdf_report(reports, "Comparacao de Cidades - Meteo Running Pro")
+                    pdf_bytes = create_pdf_report(reports, "Comparação de Cidades - Weatherun Pro")
                     st.download_button(
                         label="📄 Exportar Relatório PDF",
                         data=pdf_bytes,
@@ -2204,7 +2204,7 @@ def main():
     st.markdown(
         '<div class="footer">'
         'Dados: ERA5 Reanalysis (ECMWF) via Open-Meteo API · Modelos Fisiológicos: ACSM Guidelines<br>'
-        'Meteo Running Pro · Weather Decision Support System · Portugal'
+        'Weatherun Pro · Weather Decision Support System · Portugal'
         '</div>',
         unsafe_allow_html=True,
     )
