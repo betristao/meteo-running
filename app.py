@@ -355,8 +355,29 @@ def calculate_bearing(lat1, lon1, lat2, lon2):
 # ──────────────────────────────────────────────
 
 def kpi_card(label: str, value: str, subtitle: str = "", delta_color: str = "normal"):
-    """Render a styled KPI metric."""
-    st.metric(label=label, value=value, delta=subtitle, delta_color=delta_color)
+    """Styled KPI card with aero glass effect"""
+    text_color = "#00d4aa"
+    # Basic logic for semantic coloring if requested via subtitle or value context
+    if "precip" in label.lower() or "chuva" in label.lower():
+        try:
+            val_num = float(value.replace('%', ''))
+            if val_num > 40: text_color = "#ff5252"
+            elif val_num > 20: text_color = "#fdd835"
+        except: pass
+
+    st.markdown(f"""
+    <div style="background: rgba(255, 255, 255, 0.03); 
+                backdrop-filter: blur(12px); 
+                border: 0.5px solid rgba(255,255,255,0.1); 
+                border-radius: 16px; 
+                padding: 1.2rem; 
+                transition: all 0.3s ease;
+                margin-bottom: 1rem;">
+        <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px;">{label}</div>
+        <div style="color: {text_color}; font-size: 2.1rem; font-weight: 800; font-family: 'Outfit'; margin-bottom: 2px;">{value}</div>
+        <div style="color: rgba(255,255,255,0.3); font-size: 0.7rem; font-weight: 400;">{subtitle}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # ──────────────────────────────────────────────
@@ -376,10 +397,11 @@ def build_trend_chart(df: pd.DataFrame):
     fig.add_trace(
         go.Scatter(
             x=monthly["date"], y=monthly["temp_avg"],
-            name="Temperatura Média (°C)",
-            line=dict(color="#00d4aa", width=2.5),
+            name="Temp. Média (°C)",
+            mode="lines",
+            line=dict(color="#00d4aa", width=4, shape="spline"),
             fill="tozeroy",
-            fillcolor="rgba(0,212,170,0.08)",
+            fillcolor="rgba(0,212,170,0.05)",
         ),
         secondary_y=False,
     )
@@ -388,7 +410,10 @@ def build_trend_chart(df: pd.DataFrame):
         go.Bar(
             x=monthly["date"], y=monthly["precipitation"],
             name="Precipitação (mm)",
-            marker_color="rgba(99,160,255,0.45)",
+            marker=dict(
+                color="rgba(0,188,212,0.4)",
+                line=dict(color="rgba(0,188,212,0.8)", width=1)
+            ),
         ),
         secondary_y=True,
     )
@@ -397,14 +422,15 @@ def build_trend_chart(df: pd.DataFrame):
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=380,
-        margin=dict(l=0, r=0, t=30, b=0),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        height=400,
+        margin=dict(l=40, r=40, t=20, b=40),
+        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
         hovermode="x unified",
+        font=dict(family="Inter", size=11, color="#f1f2f6"),
     )
-    fig.update_yaxes(title_text="°C", secondary_y=False, gridcolor="rgba(255,255,255,0.06)")
-    fig.update_yaxes(title_text="mm", secondary_y=True, gridcolor="rgba(255,255,255,0.06)")
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
+    fig.update_yaxes(title_text="TEMP (°C)", secondary_y=False, gridcolor="rgba(255,255,255,0.03)", zeroline=False)
+    fig.update_yaxes(title_text="PRECIP (mm)", secondary_y=True, gridcolor="rgba(255,255,255,0.03)", zeroline=False)
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.03)", zeroline=False)
 
     return fig
 
@@ -422,7 +448,7 @@ def build_risk_heatmap(df: pd.DataFrame, month: int):
         pivot.values,
         x=[str(y) for y in pivot.columns],
         y=[str(d) for d in pivot.index],
-        color_continuous_scale=["#d32f2f", "#ff9800", "#fdd835", "#66bb6a", "#00c853"],
+        color_continuous_scale=[[0, "#1a1f2e"], [0.2, "#d32f2f"], [0.5, "#ff9800"], [0.8, "#00d4aa"], [1, "#00ffcc"]],
         zmin=0, zmax=100,
         aspect="auto",
         labels=dict(x="Ano", y="Dia", color="Score"),
@@ -431,9 +457,9 @@ def build_risk_heatmap(df: pd.DataFrame, month: int):
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=420,
-        margin=dict(l=0, r=0, t=30, b=0),
-        coloraxis_colorbar=dict(title="Score", tickvals=[0, 25, 50, 75, 100]),
+        height=450,
+        margin=dict(l=20, r=20, t=20, b=20),
+        coloraxis_showscale=False,
     )
     # Ensure day 1 is at the top, and years are treated as discrete categories
     fig.update_yaxes(autorange="reversed", type="category")
@@ -531,88 +557,92 @@ def find_best_weekends_statistical(df: pd.DataFrame, month: int, top_n: int = 3)
 
 CUSTOM_CSS = """
 <style>
-    /* Global */
-    .block-container { padding-top: 1.5rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;700&display=swap');
 
-    /* KPI cards */
-    div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, rgba(26,31,46,0.9) 0%, rgba(14,17,23,0.9) 100%);
-        border: 1px solid rgba(0,212,170,0.15);
-        border-radius: 12px;
-        padding: 1.2rem 1.5rem;
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    /* Global Typography */
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif !important;
     }
-    div[data-testid="stMetric"] label {
-        color: rgba(250,250,250,0.6) !important;
-        font-size: 0.85rem !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+    
+    h1, h2, h3, .section-header {
+        font-family: 'Outfit', sans-serif !important;
     }
-    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        font-size: 2rem !important;
+
+    /* Aero / Frosted Glass Effect */
+    div[data-testid="stMetric"], .top-weekend-card, .stAlert, div.stButton > button {
+        background: rgba(255, 255, 255, 0.03) !important;
+        backdrop-filter: blur(12px) !important;
+        -webkit-backdrop-filter: blur(12px) !important;
+        border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 16px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-4px) !important;
+        background: rgba(255, 255, 255, 0.06) !important;
+        border-color: rgba(0, 212, 170, 0.4) !important;
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(0, 212, 170, 0.1) !important;
+    }
+
+    /* Metrics Styling */
+    div[data-testid="stMetricValue"] {
+        font-family: 'Outfit', sans-serif !important;
         font-weight: 700 !important;
+        letter-spacing: -0.5px !important;
         color: #00d4aa !important;
+        text-shadow: 0 0 12px rgba(0, 212, 170, 0.3) !important;
     }
 
-    /* Section headers */
+    /* Section Headers */
     .section-header {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: rgba(250,250,250,0.85);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin: 2rem 0 1rem 0;
-        padding-bottom: 0.5rem;
-        border-bottom: 1px solid rgba(0,212,170,0.2);
-    }
-
-    /* Top weekends table */
-    .top-weekend-card {
-        background: linear-gradient(135deg, rgba(26,31,46,0.95) 0%, rgba(14,17,23,0.95) 100%);
-        border: 1px solid rgba(0,212,170,0.12);
-        border-radius: 12px;
-        padding: 1rem;
-        margin-bottom: 0.5rem;
-    }
-
-    /* Sidebar */
-    section[data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0e1117 0%, #141926 100%);
-    }
-    section[data-testid="stSidebar"] .stSelectbox label,
-    section[data-testid="stSidebar"] .stSlider label,
-    section[data-testid="stSidebar"] .stMultiSelect label {
-        color: rgba(250,250,250,0.7) !important;
-        text-transform: uppercase;
-        font-size: 0.8rem;
-        letter-spacing: 0.5px;
-    }
-
-    /* Footer */
-    .footer {
-        text-align: center;
-        color: rgba(250,250,250,0.35);
-        font-size: 0.75rem;
-        margin-top: 3rem;
-        padding: 1rem 0;
-        border-top: 1px solid rgba(255,255,255,0.05);
-    }
-
-    /* Hide default Streamlit footer & hamburger */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-
-    /* Score badge */
-    .score-badge {
-        display: inline-block;
-        padding: 4px 12px;
-        border-radius: 20px;
+        font-size: 1.2rem;
         font-weight: 700;
-        font-size: 0.9rem;
+        color: #f1f2f6;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin: 2.5rem 0 1.2rem 0;
+        padding-bottom: 0.8rem;
+        border-bottom: 2px solid rgba(0, 212, 170, 0.3);
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
-    .score-high   { background: rgba(0,200,83,0.2); color: #00c853; }
-    .score-medium { background: rgba(253,216,53,0.2); color: #fdd835; }
-    .score-low    { background: rgba(211,47,47,0.2); color: #d32f2f; }
+
+    /* Sidebar Navigation */
+    section[data-testid="stSidebar"] {
+        background-color: #0a0c10 !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    /* Buttons */
+    div.stButton > button {
+        width: 100% !important;
+        height: 3rem !important;
+        background: linear-gradient(135deg, #00d4aa 0%, #00a884 100%) !important;
+        color: white !important;
+        font-weight: 700 !important;
+        border: none !important;
+        text-transform: uppercase !important;
+        letter-spacing: 1px !important;
+    }
+    
+    div.stButton > button:hover {
+        box-shadow: 0 0 20px rgba(0, 212, 170, 0.4) !important;
+        transform: scale(1.02) !important;
+    }
+
+    /* Main Chart Glow */
+    .js-plotly-plot {
+        border-radius: 16px !important;
+        overflow: hidden !important;
+        border: 0.5px solid rgba(255, 255, 255, 0.05) !important;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #0e1117; }
+    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
 </style>
 """
 
@@ -1038,14 +1068,23 @@ def main():
                 else:
                     sem_color, sem_icon, sem_label, sem_desc = "#d32f2f", "🔴", "CRÍTICA", f"Data de alto risco. Fatores críticos: {', '.join(risk_factors)}. Considerar data alternativa."
 
+                # Dynamic Semantic Background
+                bg_gradient = f"linear-gradient(135deg, {sem_color}33 0%, {sem_color}11 100%)"
+                glow_color = f"{sem_color}44"
+                
                 st.markdown(f'''
-                <div style="background: linear-gradient(135deg, {sem_color}22, {sem_color}08); 
-                            border: 2px solid {sem_color}; border-radius: 12px; 
-                            padding: 20px 25px; margin-bottom: 20px; text-align: center;">
-                    <div style="font-size: 2.5rem;">{sem_icon}</div>
-                    <div style="font-size: 1.4rem; font-weight: 700; color: {sem_color}; margin: 5px 0;">DATA {sem_label}</div>
-                    <div style="font-size: 0.95rem; color: #dfe6e9;">{sem_desc}</div>
-                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 8px;">Índice de Risco: {risk_score}/9 · Score Climatérico: {avg_score:.0f}/100 · Baseado em {years_count} anos de dados ERA5 (ECMWF)</div>
+                <div style="background: {bg_gradient}; 
+                            backdrop-filter: blur(20px);
+                            border: 1.5px solid {sem_color}; border-radius: 24px; 
+                            padding: 30px 35px; margin-bottom: 25px; text-align: center;
+                            box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px {glow_color};">
+                    <div style="font-size: 3rem; margin-bottom: 15px;">{sem_icon}</div>
+                    <div style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: {sem_color}; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 8px;">{sem_label}</div>
+                    <div style="font-size: 1.1rem; color: #f1f2f6; opacity: 0.9;">{sem_desc}</div>
+                    <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 20px auto; width: 60%;"></div>
+                    <div style="font-size: 0.85rem; color: rgba(255,255,255,0.5); letter-spacing: 0.5px;">
+                        ÍNDICE DE RISCO: <strong>{risk_score}/9</strong> &nbsp;•&nbsp; SCORE WEATHERUN: <strong>{avg_score:.0f}/100</strong> &nbsp;•&nbsp; FONTE: ERA5 / OPEN-METEO
+                    </div>
                 </div>
                 ''', unsafe_allow_html=True)
 
