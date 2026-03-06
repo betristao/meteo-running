@@ -1919,24 +1919,35 @@ def main():
                         c_feel = f"{rpt['avg_app_temp']:.1f}"
                         c_wind = f"{rpt['avg_wind']:.1f}"
                         c_perf = f"{rpt['perf_drop']:.1f}"
-                        c_sunrise = rpt["sunrise"]
-                        c_sunset = rpt["sunset"]
-                        card_html = (
-                            f'<div style="background:{bg};border:2px solid {border_color};border-radius:12px;padding:18px;text-align:center;">'
-                            f'{badge}'
-                            f'<div style="font-size:1.05rem;font-weight:700;color:#dfe6e9;margin-bottom:8px;">{c_label}</div>'
-                            f'<div style="font-size:2.2rem;font-weight:800;color:{score_color};margin:4px 0;">{c_score}/100</div>'
-                            f'<div style="font-size:0.8rem;margin:6px 0;">{c_sem_icon} {c_sem_label}</div>'
-                            f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.9;margin-top:8px;">'
-                            f'🌧 Chuva: {c_rain}%<br>'
-                            f'🌡 Temp: {c_temp}°C<br>'
-                            f'🤒 Sensação: {c_feel}°C<br>'
-                            f'💨 Vento: {c_wind} km/h<br>'
-                            f'⏱ Janela Ideal: {c_window}<br>'
-                            f'📉 Quebra Perf.: +{c_perf}%<br>'
-                            f'🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}'
-                            f'</div></div>'
-                        )
+                        # New Premium Style for Comparison Summary Cards (Cities)
+                        border_color = "#00d4aa" if is_best else "rgba(255,255,255,0.1)"
+                        glow = f"0 0 15px {border_color}33" if is_best else "none"
+                        badge = f'<div style="background:{border_color}; color:#0a0c10; padding:4px 12px; border-radius:30px; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:inline-block;">{ "🏆 Melhor Local" if is_best else "Opção Alternativa" }</div>'
+                        
+                        card_html = f"""
+                        <div style="background: rgba(255, 255, 255, 0.03); 
+                                    backdrop-filter: blur(16px); 
+                                    border: 1.5px solid {border_color}; 
+                                    border-radius: 20px; 
+                                    padding: 24px 15px; 
+                                    text-align: center;
+                                    box-shadow: {glow};
+                                    height: 100%;">
+                            {badge}
+                            <div style="font-family: 'Outfit'; font-size: 1rem; color: rgba(255,255,255,0.6); margin-bottom: 5px;">{c_label}</div>
+                            <div style="font-family: 'Outfit'; font-size: 2.5rem; font-weight: 900; color: {score_color}; line-height: 1; margin: 10px 0;">{c_score}<span style="font-size: 1rem; opacity: 0.5;">/100</span></div>
+                            <div style="font-size: 0.85rem; font-weight: 600; color: #fff; margin-bottom: 20px;">{c_sem_icon} {c_sem_label}</div>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+                                <div>🌧 {c_rain}%</div>
+                                <div>🌡 {c_temp}°C</div>
+                                <div>💨 {c_wind}km/h</div>
+                                <div>📉 +{c_perf}%</div>
+                            </div>
+                            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 15px 0;"></div>
+                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.3);">⏱ Janela: <strong>{c_window}</strong></div>
+                        </div>
+                        """
                         st.markdown(card_html, unsafe_allow_html=True)
 
                 # Detailed report per city
