@@ -1435,46 +1435,46 @@ def main():
             return report
 
         def create_pdf_report(reports, title):
+            def sanitize(text):
+                # encode to latin-1 ignoring errors (drops emojis entirely) so FPDF text wrapper doesn't break
+                return text.encode('latin-1', 'ignore').decode('latin-1')
+                
             pdf = FPDF()
             pdf.add_page()
-            # Try to use a standard font that supports unicode by replacing characters
             pdf.set_font("Helvetica", style="B", size=16)
-            pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align="C")
+            pdf.cell(0, 10, sanitize(title), ln=True, align="C")
             pdf.ln(5)
             
             for i, rpt in enumerate(reports):
                 if not rpt.get("valid"):
                     continue
                 pdf.set_font("Helvetica", style="B", size=14)
-                pdf.cell(0, 10, f"Cenario {i+1}: {rpt['label']}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 10, sanitize(f"Cenario {i+1}: {rpt['label']}"), ln=True)
                 pdf.set_font("Helvetica", size=11)
                 
-                score_str = f"Score Geral: {rpt['score']:.0f}/100"
-                pdf.cell(0, 8, score_str.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, sanitize(f"Score Geral: {rpt['score']:.0f}/100"), ln=True)
                 
                 risk_s = rpt["risk_score"]
                 sem_label = "SEGURA" if risk_s <= 2 else ("PRECAUCAO" if risk_s <= 5 else "CRITICA")
-                pdf.cell(0, 8, f"Risco: {sem_label}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, sanitize(f"Risco: {sem_label}"), ln=True)
                 
-                pdf.cell(0, 8, f"Probabilidade de Chuva: {rpt['prob_rain']:.0f}%".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-                pdf.cell(0, 8, f"Temperatura Media: {rpt['avg_temp']:.1f}C (Sensacao: {rpt['avg_app_temp']:.1f}C)".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-                pdf.cell(0, 8, f"Vento Medio: {rpt['avg_wind']:.1f} km/h".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, sanitize(f"Probabilidade de Chuva: {rpt['prob_rain']:.0f}%"), ln=True)
+                pdf.cell(0, 8, sanitize(f"Temperatura Media: {rpt['avg_temp']:.1f}C (Sensacao: {rpt['avg_app_temp']:.1f}C)"), ln=True)
+                pdf.cell(0, 8, sanitize(f"Vento Medio: {rpt['avg_wind']:.1f} km/h"), ln=True)
                 
                 window_txt = rpt["best_window"] if rpt["best_window"] else "-"
-                pdf.cell(0, 8, f"Janela Ideal de Partida: {window_txt}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
-                pdf.cell(0, 8, f"Quebra de Performance Estimada: +{rpt['perf_drop']:.1f}%".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, sanitize(f"Janela Ideal de Partida: {window_txt}"), ln=True)
+                pdf.cell(0, 8, sanitize(f"Quebra de Performance Estimada: +{rpt['perf_drop']:.1f}%"), ln=True)
                 
                 pdf.ln(2)
                 pdf.set_font("Helvetica", style="B", size=11)
-                pdf.cell(0, 8, "Conclusoes:".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, "Conclusoes:", ln=True)
                 pdf.set_font("Helvetica", size=11)
                 for conc in rpt["conclusions"]:
-                    # Clean emojis since fpdf base fonts don't support them
-                    clean_conc = conc.replace("✅", "").replace("⚠️", "").replace("🔴", "").replace("📉", "").replace("📊", "").replace("🚀", "").replace("🌧", "").replace("💨", "").replace("🌬️", "").strip()
-                    pdf.multi_cell(0, 6, f"- {clean_conc}".encode('latin-1', 'replace').decode('latin-1'))
+                    pdf.multi_cell(0, 6, sanitize(f"- {conc}"))
                 pdf.ln(5)
                 
-            return pdf.output(dest="S").encode("latin-1")
+            return pdf.output()
 
         if "Datas" in compare_mode:
             num_dates = st.radio("Quantas datas comparar?", [2, 3], horizontal=True, key="num_compare_dates")
