@@ -107,7 +107,7 @@ def fetch_forecast_data(lat: float, lon: float) -> pd.DataFrame:
     params = {
         "latitude": lat,
         "longitude": lon,
-        "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m",
+        "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m,shortwave_radiation",
         "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,apparent_temperature_max,apparent_temperature_min,apparent_temperature_mean,precipitation_sum,wind_speed_10m_max,sunrise,sunset",
         "timezone": "Europe/Lisbon",
         "forecast_days": 14
@@ -127,11 +127,14 @@ def fetch_forecast_data(lat: float, lon: float) -> pd.DataFrame:
         "app_temp_min":   daily["apparent_temperature_min"],
         "app_temp_avg":   daily["apparent_temperature_mean"],
         "precipitation":  daily["precipitation_sum"],
-        "wind_max":       daily["wind_speed_10m_max"]
+        "wind_max":       daily["wind_speed_10m_max"],
+        "sunrise":        pd.to_datetime(daily["sunrise"]) if "sunrise" in daily else None,
+        "sunset":         pd.to_datetime(daily["sunset"]) if "sunset" in daily else None
     })
     df_daily["year"] = df_daily["date"].dt.year
     df_daily["month"] = df_daily["date"].dt.month
     df_daily["day"] = df_daily["date"].dt.day
+    df_daily["running_score"] = df_daily.apply(compute_running_score, axis=1)
     
     # Process Hourly
     hourly = data["hourly"]
@@ -909,6 +912,29 @@ def main():
             days_in_month = start_date_month.days_in_month
             race_day = st.number_input("Dia da Prova", min_value=1, max_value=days_in_month, value=15, step=1)
 
+        # ── Forecast Detection logic ──────────────────
+        is_f_active = False
+        df_f_daily = pd.DataFrame()
+        df_f_hourly = pd.DataFrame()
+        
+        try:
+            today = datetime.today().date()
+            # We assume current year for forecast check
+            target_date = datetime(today.year, race_month_num, race_day).date()
+            diff = (target_date - today).days
+            if 0 <= diff <= 14:
+                with st.spinner("⏳ A obter Previsão Real (14 dias)..."):
+                    df_f_daily, df_f_hourly = fetch_forecast_data(CITIES[city][0], CITIES[city][1])
+                    if not df_f_daily.empty:
+                        # Filter for the specific day
+                        df_f_daily = df_f_daily[df_f_daily["day"] == race_day]
+                        df_f_hourly = df_f_hourly[df_f_hourly["time"].dt.day == race_day]
+                        if not df_f_daily.empty:
+                            is_f_active = True
+        except Exception as e:
+            # Silence date errors or API errors
+            pass
+
         # Use the full dataframe `df` filtered only by the selected year range and specific day/month
         race_data = df[
             (df["month"] == race_month_num) & 
@@ -918,25 +944,59 @@ def main():
         ]
 
         if not race_data.empty:
-            years_count = race_data["year"].nunique()
-            prob_rain = (race_data["precipitation"] > 1).mean() * 100
-            avg_temp = race_data["temp_avg"].mean()
-            max_temp_avg = race_data["temp_max"].mean()
-            avg_wind = race_data["wind_max"].mean()
-            avg_score = race_data["running_score"].mean()
+            if is_f_active:
+                st.markdown(f'''
+                <div style="background-color: rgba(69, 219, 142, 0.2); border: 2px solid #45DB8E; border-radius: 8px; padding: 10px 15px; margin-bottom: 20px; text-align: center;">
+                    <span style="font-size: 1.2rem;">✨</span> <strong>MODO FORECAST ATIVO:</strong> Previsão Real encontrada para <strong>{race_day:02d}/{race_month_num:02d}/{datetime.today().year}</strong>!
+                </div>
+                ''', unsafe_allow_html=True)
+                
+                # Override metrics with forecast data
+                f_row = df_f_daily.iloc[0]
+                years_count = race_data["year"].nunique()
+                prob_rain = f_row["precipitation"] * 20 # Arbitrary mapping for display, but better use a flag
+                # If forecast rain > 1mm, we can say prob is 100% or just show the value
+                prob_label = f"{f_row['precipitation']:.1f} mm"
+                avg_temp = f_row["temp_avg"]
+                max_temp_avg = f_row["temp_max"]
+                avg_wind = f_row["wind_max"]
+                avg_score = f_row["running_score"]
+                
+                sr_h, sr_m = 0, 0
+                if pd.notna(f_row["sunrise"]):
+                    avg_sunrise = f_row["sunrise"].strftime("%H:%M")
+                    sr_h, sr_m = f_row["sunrise"].hour, f_row["sunrise"].minute
+                else:
+                    avg_sunrise = "N/A"
+                    
+                avg_sunset = f_row["sunset"].strftime("%H:%M") if pd.notna(f_row["sunset"]) else "N/A"
+                # Daylight: approx sunset - sunrise
+                if pd.notna(f_row["sunrise"]) and pd.notna(f_row["sunset"]):
+                    avg_daylight = f"{(f_row['sunset'] - f_row['sunrise']).total_seconds()/3600:.1f}h"
+                else:
+                    avg_daylight = "N/A"
+            else:
+                years_count = race_data["year"].nunique()
+                prob_rain = (race_data["precipitation"] > 1).mean() * 100
+                avg_temp = race_data["temp_avg"].mean()
+                max_temp_avg = race_data["temp_max"].mean()
+                avg_wind = race_data["wind_max"].mean()
+                avg_score = race_data["running_score"].mean()
 
-            # Sunrise/Sunset info
-            avg_sunrise = ""
-            avg_sunset = ""
-            avg_daylight = ""
-            if race_data["sunrise"].notna().any():
-                mean_sr_seconds = race_data["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                sr_h, sr_m = int(mean_sr_seconds // 3600), int((mean_sr_seconds % 3600) // 60)
-                avg_sunrise = f"{sr_h:02d}:{sr_m:02d}"
-                mean_ss_seconds = race_data["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
-                ss_h, ss_m = int(mean_ss_seconds // 3600), int((mean_ss_seconds % 3600) // 60)
-                avg_sunset = f"{ss_h:02d}:{ss_m:02d}"
-                avg_daylight = f"{race_data['daylight_hours'].mean():.1f}h"
+                # Sunrise/Sunset info
+                avg_sunrise = ""
+                avg_sunset = ""
+                avg_daylight = ""
+                sr_h, sr_m = 0, 0
+                if "sunrise" in race_data and race_data["sunrise"].notna().any():
+                    mean_sr_seconds = race_data["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
+                    sr_h, sr_m = int(mean_sr_seconds // 3600), int((mean_sr_seconds % 3600) // 60)
+                    avg_sunrise = f"{sr_h:02d}:{sr_m:02d}"
+                    mean_ss_seconds = race_data["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
+                    ss_h, ss_m = int(mean_ss_seconds // 3600), int((mean_ss_seconds % 3600) // 60)
+                    avg_sunset = f"{ss_h:02d}:{ss_m:02d}"
+                    avg_daylight = f"{race_data['daylight_hours'].mean():.1f}h"
+                prob_label = f"{prob_rain:.1f}%"
 
             tab_over, tab_sim, tab_anomalies, tab_hist = st.tabs(["📊 Visão Geral", "🤖 Simulações Pro", "🚨 Anomalias", "🗓️ Histórico Bruto"])
             with tab_over:
@@ -991,9 +1051,9 @@ def main():
 
                 rc1, rc2, rc3, rc4 = st.columns(4)
                 rc1.metric("Anos de Histórico", f"{years_count}")
-                rc2.metric("Probabilidade Chuva >1mm", f"{prob_rain:.1f}%")
-                rc3.metric("Temp. Média Esperada", f"{avg_temp:.1f} °C")
-                rc4.metric("Score Histórico", f"{avg_score:.0f}/100")
+                rc2.metric("Probabilidade Chuva >1mm" if not is_f_active else "Chuva Prevista", prob_label)
+                rc3.metric("Temp. Esperada" if not is_f_active else "Temp. Prevista (Avg/Max)", f"{avg_temp:.1f} °C" if not is_f_active else f"{avg_temp:.1f} / {max_temp_avg:.1f} °C")
+                rc4.metric("Score Histórico" if not is_f_active else "Score Previsto", f"{avg_score:.0f}/100")
 
                 # Sunrise/Sunset row
                 if avg_sunrise:
@@ -1088,12 +1148,16 @@ def main():
                     unsafe_allow_html=True,
                 )
 
-                with st.spinner("A carregar modelo horário (ERA5)..."):
-                    years_to_fetch = list(range(year_range[0], year_range[1] + 1))
-                    df_hr = fetch_hourly_specific_day(CITIES[city][0], CITIES[city][1], race_month_num, race_day, years_to_fetch)
-
-                if not df_hr.empty:
-                    df_hr["hr_score"] = df_hr.apply(compute_hourly_score, axis=1)
+                with st.spinner("A carregar modelo horário..."):
+                    if is_f_active and not df_f_hourly.empty:
+                        df_hr = df_f_hourly.copy()
+                        df_hr["hr_score"] = df_hr.apply(compute_hourly_score, axis=1)
+                        st.info("💡 **Nota:** Dados horários baseados na Previsão de 14 dias (Open-Meteo).")
+                    else:
+                        years_to_fetch = list(range(year_range[0], year_range[1] + 1))
+                        df_hr = fetch_hourly_specific_day(CITIES[city][0], CITIES[city][1], race_month_num, race_day, years_to_fetch)
+                        if not df_hr.empty:
+                            df_hr["hr_score"] = df_hr.apply(compute_hourly_score, axis=1)
 
                     sim_c1, sim_c2, sim_c3 = st.columns(3)
                     with sim_c1:
@@ -1119,7 +1183,7 @@ def main():
                         st.markdown(f"##### 🩺 Impacto Fisiológico Previsto ({dist_nome}):")
                     
                         media_app_temp = df_prova["apparent_temperature"].mean()
-                        media_rad = df_prova["shortwave_radiation"].mean()
+                        media_rad = df_prova["shortwave_radiation"].mean() if "shortwave_radiation" in df_prova else 0
                         media_vento = df_prova["wind_speed_10m"].mean()
                         media_chuva = df_prova["precipitation"].mean()
                     
@@ -1349,18 +1413,28 @@ def main():
                     ''', unsafe_allow_html=True)
 
             with tab_hist:
-                st.markdown("#### 📅 Tabela de Dados Históricos Ocorridos")
                 display_cols = ["date", "temp_max", "temp_min", "precipitation", "wind_max", "running_score"]
                 rename_map = {
                     "date": "Data", "temp_max": "Temp Máx (°C)", "temp_min": "Temp Mín (°C)", 
-                    "precipitation": "Precipitação (mm)", "wind_max": "Vento Máx (km/h)", "running_score": "Score"
+                    "precipitation": "Precipitação (mm)", "wind_max": "Vento Máx (km/h)", "running_score": "Score",
+                    "sunrise": "Nascer Sol", "sunset": "Pôr Sol"
                 }
-                if race_data["sunrise"].notna().any():
+
+                if is_f_active and not df_f_daily.empty:
+                    # Show forecast in historical table context
+                    st.markdown("#### ✨ Previsão Detalhada para a Escolhida")
+                    f_display = df_f_daily[["date", "temp_max", "temp_min", "precipitation", "wind_max", "running_score", "sunrise", "sunset"]].copy()
+                    f_display["sunrise"] = f_display["sunrise"].dt.strftime("%H:%M")
+                    f_display["sunset"]  = f_display["sunset"].dt.strftime("%H:%M")
+                    f_display["date"] = f_display["date"].dt.strftime("%d/%m/%Y")
+                    st.dataframe(f_display.rename(columns=rename_map), hide_index=True, use_container_width=True)
+                    st.markdown("---")
+
+                st.markdown("#### 📅 Tabela de Dados Históricos Ocorridos")
+                if "sunrise" in race_data and race_data["sunrise"].notna().any():
                     race_display = race_data[display_cols + ["sunrise", "sunset"]].copy()
                     race_display["sunrise"] = race_display["sunrise"].dt.strftime("%H:%M")
                     race_display["sunset"]  = race_display["sunset"].dt.strftime("%H:%M")
-                    rename_map["sunrise"] = "Nascer Sol"
-                    rename_map["sunset"]  = "Pôr Sol"
                 else:
                     race_display = race_data[display_cols].copy()
                 st.dataframe(
@@ -1457,7 +1531,7 @@ def main():
             report["sunrise"] = "-"
             report["sunset"] = "-"
             report["daylight"] = "-"
-            if cdata_daily["sunrise"].notna().any():
+            if "sunrise" in cdata_daily and cdata_daily["sunrise"].notna().any():
                 sr_s = cdata_daily["sunrise"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
                 report["sunrise"] = f"{int(sr_s // 3600):02d}:{int((sr_s % 3600) // 60):02d}"
                 ss_s = cdata_daily["sunset"].dropna().apply(lambda x: x.hour * 3600 + x.minute * 60 + x.second).mean()
