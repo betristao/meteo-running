@@ -355,15 +355,27 @@ def calculate_bearing(lat1, lon1, lat2, lon2):
 # ──────────────────────────────────────────────
 
 def kpi_card(label: str, value: str, subtitle: str = "", delta_color: str = "normal"):
-    """Styled KPI card with aero glass effect"""
-    text_color = "#00d4aa"
-    # Basic logic for semantic coloring if requested via subtitle or value context
-    if "precip" in label.lower() or "chuva" in label.lower():
-        try:
-            val_num = float(value.replace('%', ''))
-            if val_num > 40: text_color = "#ff5252"
-            elif val_num > 20: text_color = "#fdd835"
-        except: pass
+    """Styled KPI card with aero glass effect and semantic coloring"""
+    text_color = "#00d4aa" # Default Emerald
+    
+    # Semantic logic
+    label_l = label.lower()
+    try:
+        if "score" in label_l:
+            val = float(value.split('/')[0])
+            if val >= 80: text_color = "#00d4aa"
+            elif val >= 50: text_color = "#fdd835"
+            else: text_color = "#ff5252"
+        elif "precip" in label_l or "chuva" in label_l:
+            val = float(value.replace('%', '').replace('mm', '').strip())
+            if val > 40 or (val > 10 and "mm" in value): text_color = "#ff5252"
+            elif val > 20 or (val > 5 and "mm" in value): text_color = "#fdd835"
+        elif "temp" in label_l:
+            val = float(value.replace('°C', '').split('/')[0].strip())
+            if val > 28 or val < 5: text_color = "#ff5252"
+            elif val > 22 or val < 8: text_color = "#fdd835"
+    except:
+        pass
 
     st.markdown(f"""
     <div style="background: rgba(255, 255, 255, 0.03); 
@@ -372,10 +384,10 @@ def kpi_card(label: str, value: str, subtitle: str = "", delta_color: str = "nor
                 border-radius: 16px; 
                 padding: 1.2rem; 
                 transition: all 0.3s ease;
-                margin-bottom: 1rem;">
-        <div style="color: rgba(255,255,255,0.5); font-size: 0.75rem; text-transform: uppercase; font-weight: 600; letter-spacing: 1px; margin-bottom: 5px;">{label}</div>
-        <div style="color: {text_color}; font-size: 2.1rem; font-weight: 800; font-family: 'Outfit'; margin-bottom: 2px;">{value}</div>
-        <div style="color: rgba(255,255,255,0.3); font-size: 0.7rem; font-weight: 400;">{subtitle}</div>
+                height: 100%;">
+        <div style="color: rgba(255,255,255,0.4); font-size: 0.72rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.8px; margin-bottom: 8px;">{label}</div>
+        <div style="color: {text_color}; font-size: 2rem; font-weight: 800; font-family: 'Outfit'; line-height: 1; text-shadow: 0 0 10px {text_color}33;">{value}</div>
+        {f'<div style="color: rgba(255,255,255,0.25); font-size: 0.65rem; margin-top: 6px; font-weight: 400;">{subtitle}</div>' if subtitle else ''}
     </div>
     """, unsafe_allow_html=True)
 
@@ -591,7 +603,7 @@ CUSTOM_CSS = """
         font-weight: 700 !important;
         letter-spacing: -0.5px !important;
         color: #00d4aa !important;
-        text-shadow: 0 0 12px rgba(0, 212, 170, 0.3) !important;
+        text-shadow: 0 0 8px rgba(0, 212, 170, 0.2) !important;
     }
 
     /* Section Headers */
@@ -1089,17 +1101,19 @@ def main():
                 ''', unsafe_allow_html=True)
 
                 rc1, rc2, rc3, rc4 = st.columns(4)
-                rc1.metric("Anos de Histórico", f"{years_count}")
-                rc2.metric("Probabilidade Chuva >1mm" if not is_f_active else "Chuva Prevista", prob_label)
-                rc3.metric("Temp. Esperada" if not is_f_active else "Temp. Prevista (Avg/Max)", f"{avg_temp:.1f} °C" if not is_f_active else f"{avg_temp:.1f} / {max_temp_avg:.1f} °C")
-                rc4.metric("Score Histórico" if not is_f_active else "Score Previsto", f"{avg_score:.0f}/100")
+                with rc1: kpi_card("Anos de Histórico", f"{years_count}")
+                with rc2: kpi_card("Probabilidade Chuva" if not is_f_active else "Chuva Prevista", prob_label)
+                with rc3: kpi_card("Temp. Esperada" if not is_f_active else "Temp. Prevista", f"{avg_temp:.1f} °C" if not is_f_active else f"{avg_temp:.1f}/{max_temp_avg:.1f} °C")
+                with rc4: kpi_card("Score Médio" if not is_f_active else "Score Previsto", f"{avg_score:.0f}/100")
 
-                # Sunrise/Sunset row
+                # Sunrise/Sunset row - Use 4 columns for alignment
                 if avg_sunrise:
-                    sc1, sc2, sc3 = st.columns(3)
-                    sc1.metric("🌅 Nascer do Sol", avg_sunrise)
-                    sc2.metric("🌇 Pôr do Sol", avg_sunset)
-                    sc3.metric("☀️ Horas de Luz", avg_daylight)
+                    st.write("") # Spacer
+                    sc1, sc2, sc3, sc4 = st.columns(4)
+                    with sc1: kpi_card("🌅 Nascer do Sol", avg_sunrise)
+                    with sc2: kpi_card("🌇 Pôr do Sol", avg_sunset)
+                    with sc3: kpi_card("☀️ Horas de Luz", avg_daylight)
+                    # sc4 left empty or for future metric
 
                 st.markdown("#### 🏃 Recomendações Técnicas para a Organização:")
             
