@@ -1318,20 +1318,30 @@ def main():
                         is_best = idx == best_idx
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
+                        score_color = "#00c853" if is_best else "#74b9ff"
                         badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR OPÇÃO</div>' if is_best else ""
+                        label = result["Comparação"]
+                        score_val = result["Score"]
+                        chuva = result["Chuva (%)"]
+                        temp = result["Temp (°C)"]
+                        sensacao = result["Sensação (°C)"]
+                        vento = result["Vento"]
+                        nascer = result["Nascer Sol"]
+                        por = result["Pôr Sol"]
+                        luz = result["Luz"]
                         st.markdown(f'''
                         <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
                             {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{result["Comparação"]}</div>
-                            <div style="font-size: 2rem; font-weight: 800; color: {"#00c853" if is_best else "#74b9ff"}; margin: 8px 0;">{result["Score"]}</div>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{label}</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: {score_color}; margin: 8px 0;">{score_val}</div>
                             <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.8;">
-                                🌧 Chuva: {result["Chuva (%)"]}<br>
-                                🌡 Temp: {result["Temp (°C)"]}°C<br>
-                                🤒 Sensação: {result["Sensação (°C)"]}°C<br>
-                                💨 Vento: {result["Vento"]}<br>
-                                🌅 Nascer Sol: {result["Nascer Sol"]}<br>
-                                🌇 Pôr Sol: {result["Pôr Sol"]}<br>
-                                ☀️ Luz: {result["Luz"]}
+                                🌧 Chuva: {chuva}<br>
+                                🌡 Temp: {temp}°C<br>
+                                🤒 Sensação: {sensacao}°C<br>
+                                💨 Vento: {vento}<br>
+                                🌅 Nascer Sol: {nascer}<br>
+                                🌇 Pôr Sol: {por}<br>
+                                ☀️ Luz: {luz}
                             </div>
                         </div>
                         ''', unsafe_allow_html=True)
@@ -1412,20 +1422,30 @@ def main():
                         is_best = idx == best_idx
                         border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
                         bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
+                        score_color = "#00c853" if is_best else "#74b9ff"
                         badge = '<div style="background:#00c853; color:#fff; padding:3px 12px; border-radius:12px; font-size:0.75rem; font-weight:700; display:inline-block; margin-bottom:8px;">🏆 MELHOR LOCAL</div>' if is_best else ""
+                        label = result["Comparação"]
+                        score_val = result["Score"]
+                        chuva = result["Chuva (%)"]
+                        temp = result["Temp (°C)"]
+                        sensacao = result["Sensação (°C)"]
+                        vento = result["Vento"]
+                        nascer = result["Nascer Sol"]
+                        por = result["Pôr Sol"]
+                        luz = result["Luz"]
                         st.markdown(f'''
                         <div style="background: {bg}; border: 2px solid {border_color}; border-radius: 12px; padding: 18px; text-align: center;">
                             {badge}
-                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{result["Comparação"]}</div>
-                            <div style="font-size: 2rem; font-weight: 800; color: {"#00c853" if is_best else "#74b9ff"}; margin: 8px 0;">{result["Score"]}</div>
+                            <div style="font-size: 1.05rem; font-weight: 700; color: #dfe6e9; margin-bottom: 12px;">{label}</div>
+                            <div style="font-size: 2rem; font-weight: 800; color: {score_color}; margin: 8px 0;">{score_val}</div>
                             <div style="font-size: 0.85rem; color: rgba(255,255,255,0.6); line-height: 1.8;">
-                                🌧 Chuva: {result["Chuva (%)"]}<br>
-                                🌡 Temp: {result["Temp (°C)"]}°C<br>
-                                🤒 Sensação: {result["Sensação (°C)"]}°C<br>
-                                💨 Vento: {result["Vento"]}<br>
-                                🌅 Nascer Sol: {result["Nascer Sol"]}<br>
-                                🌇 Pôr Sol: {result["Pôr Sol"]}<br>
-                                ☀️ Luz: {result["Luz"]}
+                                🌧 Chuva: {chuva}<br>
+                                🌡 Temp: {temp}°C<br>
+                                🤒 Sensação: {sensacao}°C<br>
+                                💨 Vento: {vento}<br>
+                                🌅 Nascer Sol: {nascer}<br>
+                                🌇 Pôr Sol: {por}<br>
+                                ☀️ Luz: {luz}
                             </div>
                         </div>
                         ''', unsafe_allow_html=True)
