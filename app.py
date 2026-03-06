@@ -101,6 +101,44 @@ def fetch_weather_data(lat: float, lon: float, start_date: str, end_date: str) -
     return df
 
 @st.cache_data(ttl=3600, show_spinner=False)
+def fetch_forecast_data(lat: float, lon: float) -> pd.DataFrame:
+    """Fetch 14-day hourly forecast from Open-Meteo."""
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "hourly": "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,wind_speed_10m,wind_direction_10m",
+        "daily": "temperature_2m_max,temperature_2m_min,temperature_2m_mean,apparent_temperature_max,apparent_temperature_min,apparent_temperature_mean,precipitation_sum,wind_speed_10m_max,sunrise,sunset",
+        "timezone": "Europe/Lisbon",
+        "forecast_days": 14
+    }
+    resp = requests.get(url, params=params, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    
+    # Process Daily
+    daily = data["daily"]
+    df_daily = pd.DataFrame({
+        "date":           pd.to_datetime(daily["time"]),
+        "temp_max":       daily["temperature_2m_max"],
+        "temp_min":       daily["temperature_2m_min"],
+        "temp_avg":       daily["temperature_2m_mean"],
+        "app_temp_max":   daily["apparent_temperature_max"],
+        "app_temp_min":   daily["apparent_temperature_min"],
+        "app_temp_avg":   daily["apparent_temperature_mean"],
+        "precipitation":  daily["precipitation_sum"],
+        "wind_max":       daily["wind_speed_10m_max"]
+    })
+    
+    # Process Hourly
+    hourly = data["hourly"]
+    df_hourly = pd.DataFrame(hourly)
+    df_hourly["time"] = pd.to_datetime(df_hourly["time"])
+    df_hourly["hour"] = df_hourly["time"].dt.hour
+    
+    return df_daily, df_hourly
+
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_hourly_specific_day(lat: float, lon: float, month: int, day: int, years: list) -> pd.DataFrame:
     """Fetch hourly historical weather for a specific day across multiple years."""
     def _fetch_single_day(year):
@@ -1370,6 +1408,10 @@ def main():
                 report["valid"] = False
                 return report
             report["valid"] = True
+            
+            # Check if it's forecast or history
+            is_forecast = report.get("is_forecast", False)
+            report["data_type"] = "Previsão Real (Forecast)" if is_forecast else "Média Histórica (30 anos)"
 
             # Basic daily stats (fallback)
             years_count = cdata_daily["year"].nunique()
@@ -1572,18 +1614,33 @@ def main():
 
             if st.button("🔄 Comparar Datas", type="primary", use_container_width=True):
                 reports = []
+                # Forecast check
+                today = date.today()
+                
                 with st.spinner("A analisar cenários e gerar relatório completo..."):
                     for month_n, day_n, label in compare_dates:
-                        cdata = df[
-                            (df["month"] == month_n) & 
-                            (df["day"] == day_n) & 
-                            (df["year"] >= year_range[0]) & 
-                            (df["year"] <= year_range[1])
-                        ]
-                        # Fetch hourly data
-                        years_list = list(range(year_range[0], year_range[1] + 1))
-                        df_hr = fetch_hourly_specific_day(CITIES[city][0], CITIES[city][1], month_n, day_n, years_list)
+                        # Determine if date is in forecast window (next 14d)
+                        try:
+                            target_dt = date(today.year, month_n, day_n)
+                            if target_dt < today:
+                                target_dt = date(today.year + 1, month_n, day_n)
+                            days_diff = (target_dt - today).days
+                            is_f_active = 0 <= days_diff <= 13
+                        except: is_f_active = False
+
+                        lat, lon = CITIES[city]
+                        if is_f_active:
+                            df_d_f, df_h_f = fetch_forecast_data(lat, lon)
+                            cdata = df_d_f[df_d_f["date"].dt.date == target_dt].copy()
+                            cdata["running_score"] = cdata.apply(compute_running_score, axis=1)
+                            df_hr = df_h_f[df_h_f["time"].dt.date == target_dt].copy()
+                        else:
+                            cdata = df[(df["month"] == month_n) & (df["day"] == day_n) & (df["year"] >= year_range[0]) & (df["year"] <= year_range[1])]
+                            years_list = list(range(year_range[0], year_range[1] + 1))
+                            df_hr = fetch_hourly_specific_day(lat, lon, month_n, day_n, years_list)
+                        
                         report = generate_scenario_report(cdata, df_hr, f"{label} ({city})", city, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
+                        report["is_forecast"] = is_f_active
                         reports.append(report)
 
                 # Find winner
@@ -1728,15 +1785,33 @@ def main():
             
             if st.button("🔄 Comparar Cidades", type="primary", use_container_width=True):
                 reports = []
+                today = date.today()
                 with st.spinner("A analisar cenários e gerar relatório completo..."):
                     for c in compare_cities:
                         lat_c, lon_c = CITIES[c]
-                        c_df = fetch_weather_data(lat_c, lon_c, f"{year_range[0]}-01-01", f"{year_range[1]}-12-31")
-                        c_df = add_scores(c_df)
-                        cdata = c_df[(c_df["month"] == cm_num) & (c_df["day"] == cd)]
-                        years_list = list(range(year_range[0], year_range[1] + 1))
-                        df_hr = fetch_hourly_specific_day(lat_c, lon_c, cm_num, cd, years_list)
+                        # Forecast check
+                        try:
+                            target_dt = date(today.year, cm_num, cd)
+                            if target_dt < today:
+                                target_dt = date(today.year + 1, cm_num, cd)
+                            days_diff = (target_dt - today).days
+                            is_f_active = 0 <= days_diff <= 13
+                        except: is_f_active = False
+
+                        if is_f_active:
+                            df_d_f, df_h_f = fetch_forecast_data(lat_c, lon_c)
+                            cdata = df_d_f[df_d_f["date"].dt.date == target_dt].copy()
+                            cdata["running_score"] = cdata.apply(compute_running_score, axis=1)
+                            df_hr = df_h_f[df_h_f["time"].dt.date == target_dt].copy()
+                        else:
+                            c_df = fetch_weather_data(lat_c, lon_c, f"{year_range[0]}-01-01", f"{year_range[1]}-12-31")
+                            c_df = add_scores(c_df)
+                            cdata = c_df[(c_df["month"] == cm_num) & (c_df["day"] == cd)]
+                            years_list = list(range(year_range[0], year_range[1] + 1))
+                            df_hr = fetch_hourly_specific_day(lat_c, lon_c, cm_num, cd, years_list)
+                        
                         report = generate_scenario_report(cdata, df_hr, f"{c} ({cd}/{cm_num:02})", c, cmp_dist_km, cmp_dist_nome, cmp_hora_partida, cmp_duracao, cmp_dir_graus, cmp_dir_nome)
+                        report["is_forecast"] = is_f_active
                         reports.append(report)
 
                 # Find winner
@@ -1828,7 +1903,12 @@ def main():
                         else:
                             st.markdown(f'<div style="background:rgba(0,200,83,0.08); border-left:4px solid #00c853; padding:10px 15px; border-radius:4px; margin:8px 0;"><strong style="color:#00c853;">🚀 Performance Máxima ({cmp_dist_nome})</strong><br><span style="color:#b2bec3; font-size:0.85rem;">Sensação Térmica ideal: {rpt["avg_app_temp"]:.1f}°C</span></div>', unsafe_allow_html=True)
 
-                        st.markdown(f"<div style='color:#b2bec3; font-size:0.85rem; margin-top:8px;'>📊 Extremos históricos ({rpt['years']} anos): Máx {rpt['max_temp_hist']:.1f}°C · Mín {rpt['min_temp_hist']:.1f}°C</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='color:#b2bec3; font-size:0.85rem; margin-top:8px;'>📊 Fonte de Dados: <strong>{rpt['data_type']}</strong></div>", unsafe_allow_html=True)
+                        
+                        if not rpt.get("is_forecast"):
+                            st.markdown(f"<div style='color:#b2bec3; font-size:0.85rem;'>📈 Extremos históricos ({rpt['years']} anos): Máx {rpt['max_temp_hist']:.1f}°C · Mín {rpt['min_temp_hist']:.1f}°C</div>", unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"<div style='background:rgba(33,150,243,0.1); border:1px solid #2196f3; padding:5px 10px; border-radius:4px; font-size:0.8rem; color:#2196f3;'>💡 Estás a ver dados reais do satélite para esta data!</div>", unsafe_allow_html=True)
 
                         st.markdown("**🎯 Conclusões:**")
                         for conclusion in rpt["conclusions"]:
