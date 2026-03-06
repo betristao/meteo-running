@@ -355,41 +355,8 @@ def calculate_bearing(lat1, lon1, lat2, lon2):
 # ──────────────────────────────────────────────
 
 def kpi_card(label: str, value: str, subtitle: str = "", delta_color: str = "normal"):
-    """Styled KPI card with aero glass effect and semantic coloring"""
-    text_color = "#00d4aa" # Default Emerald
-    
-    # Semantic logic
-    label_l = label.lower()
-    try:
-        if "score" in label_l:
-            val = float(value.split('/')[0])
-            if val >= 80: text_color = "#00d4aa"
-            elif val >= 50: text_color = "#fdd835"
-            else: text_color = "#ff5252"
-        elif "precip" in label_l or "chuva" in label_l:
-            val = float(value.replace('%', '').replace('mm', '').strip())
-            if val > 40 or (val > 10 and "mm" in value): text_color = "#ff5252"
-            elif val > 20 or (val > 5 and "mm" in value): text_color = "#fdd835"
-        elif "temp" in label_l:
-            val = float(value.replace('°C', '').split('/')[0].strip())
-            if val > 28 or val < 5: text_color = "#ff5252"
-            elif val > 22 or val < 8: text_color = "#fdd835"
-    except:
-        pass
-
-    st.markdown(f"""
-    <div style="background: rgba(255, 255, 255, 0.03); 
-                backdrop-filter: blur(12px); 
-                border: 0.5px solid rgba(255,255,255,0.1); 
-                border-radius: 16px; 
-                padding: 1.2rem; 
-                transition: all 0.3s ease;
-                height: 100%;">
-        <div style="color: rgba(255,255,255,0.4); font-size: 0.72rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.8px; margin-bottom: 8px;">{label}</div>
-        <div style="color: {text_color}; font-size: 2rem; font-weight: 800; font-family: 'Outfit'; line-height: 1; text-shadow: 0 0 10px {text_color}33;">{value}</div>
-        {f'<div style="color: rgba(255,255,255,0.25); font-size: 0.65rem; margin-top: 6px; font-weight: 400;">{subtitle}</div>' if subtitle else ''}
-    </div>
-    """, unsafe_allow_html=True)
+    """Render a styled KPI metric."""
+    st.metric(label=label, value=value, delta=subtitle, delta_color=delta_color)
 
 
 # ──────────────────────────────────────────────
@@ -409,11 +376,10 @@ def build_trend_chart(df: pd.DataFrame):
     fig.add_trace(
         go.Scatter(
             x=monthly["date"], y=monthly["temp_avg"],
-            name="Temp. Média (°C)",
-            mode="lines",
-            line=dict(color="#00d4aa", width=4, shape="spline"),
+            name="Temperatura Média (°C)",
+            line=dict(color="#00d4aa", width=2.5),
             fill="tozeroy",
-            fillcolor="rgba(0,212,170,0.05)",
+            fillcolor="rgba(0,212,170,0.08)",
         ),
         secondary_y=False,
     )
@@ -422,10 +388,7 @@ def build_trend_chart(df: pd.DataFrame):
         go.Bar(
             x=monthly["date"], y=monthly["precipitation"],
             name="Precipitação (mm)",
-            marker=dict(
-                color="rgba(0,188,212,0.4)",
-                line=dict(color="rgba(0,188,212,0.8)", width=1)
-            ),
+            marker_color="rgba(99,160,255,0.45)",
         ),
         secondary_y=True,
     )
@@ -434,15 +397,14 @@ def build_trend_chart(df: pd.DataFrame):
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=400,
-        margin=dict(l=40, r=40, t=20, b=40),
-        legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1),
+        height=380,
+        margin=dict(l=0, r=0, t=30, b=0),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
-        font=dict(family="Inter", size=11, color="#f1f2f6"),
     )
-    fig.update_yaxes(title_text="TEMP (°C)", secondary_y=False, gridcolor="rgba(255,255,255,0.03)", zeroline=False)
-    fig.update_yaxes(title_text="PRECIP (mm)", secondary_y=True, gridcolor="rgba(255,255,255,0.03)", zeroline=False)
-    fig.update_xaxes(gridcolor="rgba(255,255,255,0.03)", zeroline=False)
+    fig.update_yaxes(title_text="°C", secondary_y=False, gridcolor="rgba(255,255,255,0.06)")
+    fig.update_yaxes(title_text="mm", secondary_y=True, gridcolor="rgba(255,255,255,0.06)")
+    fig.update_xaxes(gridcolor="rgba(255,255,255,0.06)")
 
     return fig
 
@@ -460,7 +422,7 @@ def build_risk_heatmap(df: pd.DataFrame, month: int):
         pivot.values,
         x=[str(y) for y in pivot.columns],
         y=[str(d) for d in pivot.index],
-        color_continuous_scale=[[0, "#1a1f2e"], [0.2, "#d32f2f"], [0.5, "#ff9800"], [0.8, "#00d4aa"], [1, "#00ffcc"]],
+        color_continuous_scale=["#d32f2f", "#ff9800", "#fdd835", "#66bb6a", "#00c853"],
         zmin=0, zmax=100,
         aspect="auto",
         labels=dict(x="Ano", y="Dia", color="Score"),
@@ -469,9 +431,9 @@ def build_risk_heatmap(df: pd.DataFrame, month: int):
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        height=450,
-        margin=dict(l=20, r=20, t=20, b=20),
-        coloraxis_showscale=False,
+        height=420,
+        margin=dict(l=0, r=0, t=30, b=0),
+        coloraxis_colorbar=dict(title="Score", tickvals=[0, 25, 50, 75, 100]),
     )
     # Ensure day 1 is at the top, and years are treated as discrete categories
     fig.update_yaxes(autorange="reversed", type="category")
@@ -569,92 +531,88 @@ def find_best_weekends_statistical(df: pd.DataFrame, month: int, top_n: int = 3)
 
 CUSTOM_CSS = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;700&display=swap');
+    /* Global */
+    .block-container { padding-top: 1.5rem; }
 
-    /* Global Typography */
-    html, body, [class*="css"] {
-        font-family: 'Inter', sans-serif !important;
+    /* KPI cards */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(135deg, rgba(26,31,46,0.9) 0%, rgba(14,17,23,0.9) 100%);
+        border: 1px solid rgba(0,212,170,0.15);
+        border-radius: 12px;
+        padding: 1.2rem 1.5rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
     }
-    
-    h1, h2, h3, .section-header {
-        font-family: 'Outfit', sans-serif !important;
-    }
-
-    /* Aero / Frosted Glass Effect */
-    div[data-testid="stMetric"], .top-weekend-card, .stAlert, div.stButton > button {
-        background: rgba(255, 255, 255, 0.03) !important;
-        backdrop-filter: blur(12px) !important;
-        -webkit-backdrop-filter: blur(12px) !important;
-        border: 0.5px solid rgba(255, 255, 255, 0.1) !important;
-        border-radius: 16px !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-4px) !important;
-        background: rgba(255, 255, 255, 0.06) !important;
-        border-color: rgba(0, 212, 170, 0.4) !important;
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4), 0 0 15px rgba(0, 212, 170, 0.1) !important;
-    }
-
-    /* Metrics Styling */
-    div[data-testid="stMetricValue"] {
-        font-family: 'Outfit', sans-serif !important;
-        font-weight: 700 !important;
-        letter-spacing: -0.5px !important;
-        color: #00d4aa !important;
-        text-shadow: 0 0 8px rgba(0, 212, 170, 0.2) !important;
-    }
-
-    /* Section Headers */
-    .section-header {
-        font-size: 1.2rem;
-        font-weight: 700;
-        color: #f1f2f6;
+    div[data-testid="stMetric"] label {
+        color: rgba(250,250,250,0.6) !important;
+        font-size: 0.85rem !important;
         text-transform: uppercase;
-        letter-spacing: 2px;
-        margin: 2.5rem 0 1.2rem 0;
-        padding-bottom: 0.8rem;
-        border-bottom: 2px solid rgba(0, 212, 170, 0.3);
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        letter-spacing: 0.5px;
     }
-
-    /* Sidebar Navigation */
-    section[data-testid="stSidebar"] {
-        background-color: #0a0c10 !important;
-        border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
-    }
-
-    /* Buttons */
-    div.stButton > button {
-        width: 100% !important;
-        height: 3rem !important;
-        background: linear-gradient(135deg, #00d4aa 0%, #00a884 100%) !important;
-        color: white !important;
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        font-size: 2rem !important;
         font-weight: 700 !important;
-        border: none !important;
-        text-transform: uppercase !important;
-        letter-spacing: 1px !important;
-    }
-    
-    div.stButton > button:hover {
-        box-shadow: 0 0 20px rgba(0, 212, 170, 0.4) !important;
-        transform: scale(1.02) !important;
+        color: #00d4aa !important;
     }
 
-    /* Main Chart Glow */
-    .js-plotly-plot {
-        border-radius: 16px !important;
-        overflow: hidden !important;
-        border: 0.5px solid rgba(255, 255, 255, 0.05) !important;
+    /* Section headers */
+    .section-header {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(250,250,250,0.85);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin: 2rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(0,212,170,0.2);
     }
 
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #0e1117; }
-    ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+    /* Top weekends table */
+    .top-weekend-card {
+        background: linear-gradient(135deg, rgba(26,31,46,0.95) 0%, rgba(14,17,23,0.95) 100%);
+        border: 1px solid rgba(0,212,170,0.12);
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    /* Sidebar */
+    section[data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0e1117 0%, #141926 100%);
+    }
+    section[data-testid="stSidebar"] .stSelectbox label,
+    section[data-testid="stSidebar"] .stSlider label,
+    section[data-testid="stSidebar"] .stMultiSelect label {
+        color: rgba(250,250,250,0.7) !important;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.5px;
+    }
+
+    /* Footer */
+    .footer {
+        text-align: center;
+        color: rgba(250,250,250,0.35);
+        font-size: 0.75rem;
+        margin-top: 3rem;
+        padding: 1rem 0;
+        border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    /* Hide default Streamlit footer & hamburger */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+
+    /* Score badge */
+    .score-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.9rem;
+    }
+    .score-high   { background: rgba(0,200,83,0.2); color: #00c853; }
+    .score-medium { background: rgba(253,216,53,0.2); color: #fdd835; }
+    .score-low    { background: rgba(211,47,47,0.2); color: #d32f2f; }
 </style>
 """
 
@@ -1080,40 +1038,29 @@ def main():
                 else:
                     sem_color, sem_icon, sem_label, sem_desc = "#d32f2f", "🔴", "CRÍTICA", f"Data de alto risco. Fatores críticos: {', '.join(risk_factors)}. Considerar data alternativa."
 
-                # Dynamic Semantic Background
-                bg_gradient = f"linear-gradient(135deg, {sem_color}33 0%, {sem_color}11 100%)"
-                glow_color = f"{sem_color}44"
-                
                 st.markdown(f'''
-                <div style="background: {bg_gradient}; 
-                            backdrop-filter: blur(20px);
-                            border: 1.5px solid {sem_color}; border-radius: 24px; 
-                            padding: 30px 35px; margin-bottom: 25px; text-align: center;
-                            box-shadow: 0 15px 35px rgba(0,0,0,0.4), 0 0 20px {glow_color};">
-                    <div style="font-size: 3rem; margin-bottom: 15px;">{sem_icon}</div>
-                    <div style="font-family: 'Outfit', sans-serif; font-size: 1.8rem; font-weight: 800; color: {sem_color}; text-transform: uppercase; letter-spacing: 3px; margin-bottom: 8px;">{sem_label}</div>
-                    <div style="font-size: 1.1rem; color: #f1f2f6; opacity: 0.9;">{sem_desc}</div>
-                    <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 20px auto; width: 60%;"></div>
-                    <div style="font-size: 0.85rem; color: rgba(255,255,255,0.5); letter-spacing: 0.5px;">
-                        ÍNDICE DE RISCO: <strong>{risk_score}/9</strong> &nbsp;•&nbsp; SCORE WEATHERUN: <strong>{avg_score:.0f}/100</strong> &nbsp;•&nbsp; FONTE: ERA5 / OPEN-METEO
-                    </div>
+                <div style="background: linear-gradient(135deg, {sem_color}22, {sem_color}08); 
+                            border: 2px solid {sem_color}; border-radius: 12px; 
+                            padding: 20px 25px; margin-bottom: 20px; text-align: center;">
+                    <div style="font-size: 2.5rem;">{sem_icon}</div>
+                    <div style="font-size: 1.4rem; font-weight: 700; color: {sem_color}; margin: 5px 0;">DATA {sem_label}</div>
+                    <div style="font-size: 0.95rem; color: #dfe6e9;">{sem_desc}</div>
+                    <div style="font-size: 0.8rem; color: rgba(255,255,255,0.4); margin-top: 8px;">Índice de Risco: {risk_score}/9 · Score Climatérico: {avg_score:.0f}/100 · Baseado em {years_count} anos de dados ERA5 (ECMWF)</div>
                 </div>
                 ''', unsafe_allow_html=True)
 
                 rc1, rc2, rc3, rc4 = st.columns(4)
-                with rc1: kpi_card("Anos de Histórico", f"{years_count}")
-                with rc2: kpi_card("Probabilidade Chuva" if not is_f_active else "Chuva Prevista", prob_label)
-                with rc3: kpi_card("Temp. Esperada" if not is_f_active else "Temp. Prevista", f"{avg_temp:.1f} °C" if not is_f_active else f"{avg_temp:.1f}/{max_temp_avg:.1f} °C")
-                with rc4: kpi_card("Score Médio" if not is_f_active else "Score Previsto", f"{avg_score:.0f}/100")
+                rc1.metric("Anos de Histórico", f"{years_count}")
+                rc2.metric("Probabilidade Chuva >1mm" if not is_f_active else "Chuva Prevista", prob_label)
+                rc3.metric("Temp. Esperada" if not is_f_active else "Temp. Prevista (Avg/Max)", f"{avg_temp:.1f} °C" if not is_f_active else f"{avg_temp:.1f} / {max_temp_avg:.1f} °C")
+                rc4.metric("Score Histórico" if not is_f_active else "Score Previsto", f"{avg_score:.0f}/100")
 
-                # Sunrise/Sunset row - Use 4 columns for alignment
+                # Sunrise/Sunset row
                 if avg_sunrise:
-                    st.write("") # Spacer
-                    sc1, sc2, sc3, sc4 = st.columns(4)
-                    with sc1: kpi_card("🌅 Nascer do Sol", avg_sunrise)
-                    with sc2: kpi_card("🌇 Pôr do Sol", avg_sunset)
-                    with sc3: kpi_card("☀️ Horas de Luz", avg_daylight)
-                    # sc4 left empty or for future metric
+                    sc1, sc2, sc3 = st.columns(3)
+                    sc1.metric("🌅 Nascer do Sol", avg_sunrise)
+                    sc2.metric("🌇 Pôr do Sol", avg_sunset)
+                    sc3.metric("☀️ Horas de Luz", avg_daylight)
 
                 st.markdown("#### 🏃 Recomendações Técnicas para a Organização:")
             
@@ -1787,7 +1734,10 @@ def main():
                             st.warning("Sem dados")
                             continue
                         is_best = idx == best_idx
-                        score_color = "#00d4aa" if is_best else "#74b9ff"
+                        border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
+                        bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
+                        score_color = "#00c853" if is_best else "#74b9ff"
+                        badge = '<div style="background:#00c853;color:#fff;padding:3px 12px;border-radius:12px;font-size:0.75rem;font-weight:700;display:inline-block;margin-bottom:8px;">🏆 MELHOR OPÇÃO</div>' if is_best else ""
                         c_label = rpt["label"]
                         c_score = f"{rpt['score']:.0f}"
                         c_risk = rpt["risk_score"]
@@ -1796,38 +1746,27 @@ def main():
                         c_window = rpt["best_window"] if rpt["best_window"] else "-"
                         c_rain = f"{rpt['prob_rain']:.0f}"
                         c_temp = f"{rpt['avg_temp']:.1f}"
+                        c_feel = f"{rpt['avg_app_temp']:.1f}"
                         c_wind = f"{rpt['avg_wind']:.1f}"
                         c_perf = f"{rpt['perf_drop']:.1f}"
-
-                        # New Premium Style for Comparison Summary Cards
-                        border_color = "#00d4aa" if is_best else "rgba(255,255,255,0.1)"
-                        glow = f"0 0 15px {border_color}33" if is_best else "none"
-                        badge = f'<div style="background:{border_color}; color:#0a0c10; padding:4px 12px; border-radius:30px; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:inline-block;">{ "🏆 Melhor Opção" if is_best else "Cenário Alternativo" }</div>'
-                        
-                        card_html = f"""
-                        <div style="background: rgba(255, 255, 255, 0.03); 
-                                    backdrop-filter: blur(16px); 
-                                    border: 1.5px solid {border_color}; 
-                                    border-radius: 20px; 
-                                    padding: 24px 15px; 
-                                    text-align: center;
-                                    box-shadow: {glow};
-                                    height: 100%;">
-                            {badge}
-                            <div style="font-family: 'Outfit'; font-size: 1rem; color: rgba(255,255,255,0.6); margin-bottom: 5px;">{c_label}</div>
-                            <div style="font-family: 'Outfit'; font-size: 2.5rem; font-weight: 900; color: {score_color}; line-height: 1; margin: 10px 0;">{c_score}<span style="font-size: 1rem; opacity: 0.5;">/100</span></div>
-                            <div style="font-size: 0.85rem; font-weight: 600; color: #fff; margin-bottom: 20px;">{c_sem_icon} {c_sem_label}</div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
-                                <div>🌧 {c_rain}%</div>
-                                <div>🌡 {c_temp}°C</div>
-                                <div>💨 {c_wind}km/h</div>
-                                <div>📉 +{c_perf}%</div>
-                            </div>
-                            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 15px 0;"></div>
-                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.3);">⏱ Janela: <strong>{c_window}</strong></div>
-                        </div>
-                        """
+                        c_sunrise = rpt["sunrise"]
+                        c_sunset = rpt["sunset"]
+                        card_html = (
+                            f'<div style="background:{bg};border:2px solid {border_color};border-radius:12px;padding:18px;text-align:center;">'
+                            f'{badge}'
+                            f'<div style="font-size:1.05rem;font-weight:700;color:#dfe6e9;margin-bottom:8px;">{c_label}</div>'
+                            f'<div style="font-size:2.2rem;font-weight:800;color:{score_color};margin:4px 0;">{c_score}/100</div>'
+                            f'<div style="font-size:0.8rem;margin:6px 0;">{c_sem_icon} {c_sem_label}</div>'
+                            f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.9;margin-top:8px;">'
+                            f'🌧 Chuva: {c_rain}%<br>'
+                            f'🌡 Temp: {c_temp}°C<br>'
+                            f'🤒 Sensação: {c_feel}°C<br>'
+                            f'💨 Vento: {c_wind} km/h<br>'
+                            f'⏱ Janela Ideal: {c_window}<br>'
+                            f'📉 Quebra Perf.: +{c_perf}%<br>'
+                            f'🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}'
+                            f'</div></div>'
+                        )
                         st.markdown(card_html, unsafe_allow_html=True)
 
                 # Detailed report per scenario
@@ -1851,10 +1790,10 @@ def main():
                         st.markdown(f'<div style="background:{sem_c}15; border-left:4px solid {sem_c}; padding:10px 15px; border-radius:4px; margin-bottom:12px;"><strong style="color:{sem_c};">🚦 Data {sem_l}</strong> — Índice de Risco: {risk_s}/9</div>', unsafe_allow_html=True)
 
                         mc1, mc2, mc3, mc4 = st.columns(4)
-                        with mc1: kpi_card("Score Geral", f"{rpt['score']:.0f}/100")
-                        with mc2: kpi_card("Probabilidade Chuva", f"{rpt['prob_rain']:.0f}%")
-                        with mc3: kpi_card("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
-                        with mc4: kpi_card("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
+                        mc1.metric("Score", f"{rpt['score']:.0f}/100")
+                        mc2.metric("Chuva >1mm", f"{rpt['prob_rain']:.0f}%")
+                        mc3.metric("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
+                        mc4.metric("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
 
                         # Optimal window
                         if rpt["best_window"]:
@@ -1965,7 +1904,10 @@ def main():
                             st.warning("Sem dados")
                             continue
                         is_best = idx == best_idx
-                        score_color = "#00d4aa" if is_best else "#74b9ff"
+                        border_color = "#00c853" if is_best else "rgba(255,255,255,0.1)"
+                        bg = "rgba(0,200,83,0.08)" if is_best else "rgba(255,255,255,0.02)"
+                        score_color = "#00c853" if is_best else "#74b9ff"
+                        badge = '<div style="background:#00c853;color:#fff;padding:3px 12px;border-radius:12px;font-size:0.75rem;font-weight:700;display:inline-block;margin-bottom:8px;">🏆 MELHOR LOCAL</div>' if is_best else ""
                         c_label = rpt["label"]
                         c_score = f"{rpt['score']:.0f}"
                         c_risk = rpt["risk_score"]
@@ -1974,38 +1916,27 @@ def main():
                         c_window = rpt["best_window"] if rpt["best_window"] else "-"
                         c_rain = f"{rpt['prob_rain']:.0f}"
                         c_temp = f"{rpt['avg_temp']:.1f}"
+                        c_feel = f"{rpt['avg_app_temp']:.1f}"
                         c_wind = f"{rpt['avg_wind']:.1f}"
                         c_perf = f"{rpt['perf_drop']:.1f}"
-
-                        # New Premium Style for Comparison Summary Cards (Cities)
-                        border_color = "#00d4aa" if is_best else "rgba(255,255,255,0.1)"
-                        glow = f"0 0 15px {border_color}33" if is_best else "none"
-                        badge = f'<div style="background:{border_color}; color:#0a0c10; padding:4px 12px; border-radius:30px; font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; display:inline-block;">{ "🏆 Melhor Local" if is_best else "Opção Alternativa" }</div>'
-                        
-                        card_html = f"""
-                        <div style="background: rgba(255, 255, 255, 0.03); 
-                                    backdrop-filter: blur(16px); 
-                                    border: 1.5px solid {border_color}; 
-                                    border-radius: 20px; 
-                                    padding: 24px 15px; 
-                                    text-align: center;
-                                    box-shadow: {glow};
-                                    height: 100%;">
-                            {badge}
-                            <div style="font-family: 'Outfit'; font-size: 1rem; color: rgba(255,255,255,0.6); margin-bottom: 5px;">{c_label}</div>
-                            <div style="font-family: 'Outfit'; font-size: 2.5rem; font-weight: 900; color: {score_color}; line-height: 1; margin: 10px 0;">{c_score}<span style="font-size: 1rem; opacity: 0.5;">/100</span></div>
-                            <div style="font-size: 0.85rem; font-weight: 600; color: #fff; margin-bottom: 20px;">{c_sem_icon} {c_sem_label}</div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
-                                <div>🌧 {c_rain}%</div>
-                                <div>🌡 {c_temp}°C</div>
-                                <div>💨 {c_wind}km/h</div>
-                                <div>📉 +{c_perf}%</div>
-                            </div>
-                            <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 15px 0;"></div>
-                            <div style="font-size: 0.75rem; color: rgba(255,255,255,0.3);">⏱ Janela: <strong>{c_window}</strong></div>
-                        </div>
-                        """
+                        c_sunrise = rpt["sunrise"]
+                        c_sunset = rpt["sunset"]
+                        card_html = (
+                            f'<div style="background:{bg};border:2px solid {border_color};border-radius:12px;padding:18px;text-align:center;">'
+                            f'{badge}'
+                            f'<div style="font-size:1.05rem;font-weight:700;color:#dfe6e9;margin-bottom:8px;">{c_label}</div>'
+                            f'<div style="font-size:2.2rem;font-weight:800;color:{score_color};margin:4px 0;">{c_score}/100</div>'
+                            f'<div style="font-size:0.8rem;margin:6px 0;">{c_sem_icon} {c_sem_label}</div>'
+                            f'<div style="font-size:0.82rem;color:rgba(255,255,255,0.55);line-height:1.9;margin-top:8px;">'
+                            f'🌧 Chuva: {c_rain}%<br>'
+                            f'🌡 Temp: {c_temp}°C<br>'
+                            f'🤒 Sensação: {c_feel}°C<br>'
+                            f'💨 Vento: {c_wind} km/h<br>'
+                            f'⏱ Janela Ideal: {c_window}<br>'
+                            f'📉 Quebra Perf.: +{c_perf}%<br>'
+                            f'🌅 Nascer: {c_sunrise} · Pôr: {c_sunset}'
+                            f'</div></div>'
+                        )
                         st.markdown(card_html, unsafe_allow_html=True)
 
                 # Detailed report per city
@@ -2027,10 +1958,10 @@ def main():
                         st.markdown(f'<div style="background:{sem_c}15; border-left:4px solid {sem_c}; padding:10px 15px; border-radius:4px; margin-bottom:12px;"><strong style="color:{sem_c};">🚦 Data {sem_l}</strong> — Índice de Risco: {risk_s}/9</div>', unsafe_allow_html=True)
 
                         mc1, mc2, mc3, mc4 = st.columns(4)
-                        with mc1: kpi_card("Score Geral", f"{rpt['score']:.0f}/100")
-                        with mc2: kpi_card("Probabilidade Chuva", f"{rpt['prob_rain']:.0f}%")
-                        with mc3: kpi_card("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
-                        with mc4: kpi_card("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
+                        mc1.metric("Score", f"{rpt['score']:.0f}/100")
+                        mc2.metric("Chuva >1mm", f"{rpt['prob_rain']:.0f}%")
+                        mc3.metric("Temp. Média", f"{rpt['avg_temp']:.1f}°C")
+                        mc4.metric("Vento Médio", f"{rpt['avg_wind']:.1f} km/h")
 
                         if rpt["best_window"]:
                             st.markdown(f'''
