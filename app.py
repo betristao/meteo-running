@@ -225,10 +225,12 @@ def add_scores(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ──────────────────────────────────────────────
-# GPX HELPERS
+# GPX/KML/KMZ HELPERS
 # ──────────────────────────────────────────────
 import xml.etree.ElementTree as ET
 import math
+import zipfile
+import io
 
 def parse_gpx(xml_string):
     try:
@@ -251,6 +253,39 @@ def parse_gpx(xml_string):
             except Exception:
                 pass
     return points
+
+def parse_kml_string(kml_string):
+    points = []
+    try:
+        root = ET.fromstring(kml_string)
+        # KML usually has coordinates inside <LineString><coordinates>
+        for coords in root.iter():
+            if 'coordinates' in coords.tag and coords.text:
+                text = coords.text.strip()
+                pairs = text.split()
+                for pair in pairs:
+                    parts = pair.split(',')
+                    if len(parts) >= 2:
+                        lon = float(parts[0])
+                        lat = float(parts[1])
+                        ele = float(parts[2]) if len(parts) >= 3 else 0.0
+                        points.append((lat, lon, ele))
+                if len(points) > 0:
+                    break # Use the first track found
+    except Exception:
+        pass
+    return points
+
+def extract_kmz(kmz_bytes):
+    try:
+        with zipfile.ZipFile(io.BytesIO(kmz_bytes)) as z:
+            for filename in z.namelist():
+                if filename.lower().endswith('.kml'):
+                    kml_data = z.read(filename)
+                    return parse_kml_string(kml_data)
+    except Exception:
+        pass
+    return []
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371.0
@@ -1820,15 +1855,15 @@ def main():
                     )
 
     with tab_gpx:
-        st.markdown('<div class="section-header">🧭 Análise de Percurso (GPX)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-header">🧭 Análise de Percurso</div>', unsafe_allow_html=True)
         st.markdown('''
-        Carregue o traçado da sua prova (ficheiro `.gpx`) e indique os detalhes do evento. O sistema vai extrair a média histórica 
+        Carregue o traçado da sua prova (ficheiros `.gpx`, `.kml` ou `.kmz`) e indique os detalhes do evento. O sistema vai extrair a média histórica 
         das condições de vento para a data e cruzá-las com a direção real de cada trecho da prova, quilómetro a quilómetro!
         ''')
         
         gpx_col, _ = st.columns([1, 1])
         with gpx_col:
-            gpx_file = st.file_uploader("Ficheiro GPX", type=["gpx"], key="gpx_uploader")
+            gpx_file = st.file_uploader("Ficheiro Traçado (GPX, KML, KMZ)", type=["gpx", "kml", "kmz"], key="gpx_uploader")
             
         gcol1, gcol2, gcol3, gcol4 = st.columns(4)
         with gcol1:
@@ -1844,13 +1879,21 @@ def main():
             
         if st.button("🗺️ Analisar Aerodinâmica do Percurso", type="primary", use_container_width=True):
             if gpx_file is None:
-                st.error("Por favor, faça upload de um ficheiro GPX primeiro.")
+                st.error("Por favor, faça upload de um ficheiro de percurso primeiro.")
             else:
                 try:
-                    gpx_str = gpx_file.getvalue().decode("utf-8")
-                    pts = parse_gpx(gpx_str)
+                    file_ext = gpx_file.name.split('.')[-1].lower()
+                    if file_ext == "kmz":
+                        pts = extract_kmz(gpx_file.getvalue())
+                    elif file_ext == "kml":
+                        kml_str = gpx_file.getvalue().decode("utf-8")
+                        pts = parse_kml_string(kml_str)
+                    else:
+                        gpx_str = gpx_file.getvalue().decode("utf-8")
+                        pts = parse_gpx(gpx_str)
+                        
                     if not pts:
-                        st.error("Não foi possível extrair pontos deste ficheiro GPX. Verifique a sua formatação.")
+                        st.error("Não foi possível extrair pontos deste ficheiro. Verifique a formatação do ficheiro.")
                     else:
                         with st.spinner("A modelar o vento histórico para todo o traçado GPX..."):
                             # Filter and downsample track for performance (1 segment per ~100m)
