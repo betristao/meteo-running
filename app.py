@@ -14,6 +14,8 @@ import requests
 from datetime import datetime, date
 import calendar
 import concurrent.futures
+from fpdf import FPDF
+import io
 
 # ──────────────────────────────────────────────
 # CONSTANTS
@@ -1288,15 +1290,31 @@ def main():
                 return report
             report["valid"] = True
 
-            # Basic stats
+            # Basic daily stats (fallback)
             years_count = cdata_daily["year"].nunique()
-            avg_score = cdata_daily["running_score"].mean()
+            avg_score_daily = cdata_daily["running_score"].mean()
             prob_rain = (cdata_daily["precipitation"] > 1).mean() * 100
             avg_temp = cdata_daily["temp_avg"].mean()
             avg_app_temp = cdata_daily["app_temp_avg"].mean()
             avg_wind = cdata_daily["wind_max"].mean()
             max_temp_hist = cdata_daily["temp_max"].max()
             min_temp_hist = cdata_daily["temp_min"].min()
+            
+            # If we have hourly data, evaluate stats specifically during the planned race hours!
+            if df_hourly is not None and not df_hourly.empty:
+                df_race_hours = df_hourly[(df_hourly["hour"] >= hora_partida) & (df_hourly["hour"] < hora_partida + duracao)].copy()
+                if not df_race_hours.empty:
+                    df_race_hours["hr_score"] = df_race_hours.apply(compute_hourly_score, axis=1)
+                    avg_score = df_race_hours["hr_score"].mean()
+                    # Probability of rain during these specific hours
+                    prob_rain = (df_race_hours["precipitation"] > 0).groupby(df_race_hours["date"].dt.date).any().mean() * 100
+                    avg_temp = df_race_hours["temperature_2m"].mean()
+                    avg_app_temp = df_race_hours["apparent_temperature"].mean()
+                    avg_wind = df_race_hours["wind_speed_10m"].mean()
+                else:
+                    avg_score = avg_score_daily
+            else:
+                avg_score = avg_score_daily
 
             report["years"] = years_count
             report["score"] = avg_score
@@ -1390,6 +1408,8 @@ def main():
 
             # Conclusions
             conclusions = []
+            conclusions.append(f"📌 Análise focada na hora prevista: {hora_partida:02d}:00")
+            
             if risk_score <= 2:
                 conclusions.append("✅ Data segura para a realização da prova")
             elif risk_score <= 5:
@@ -1413,6 +1433,48 @@ def main():
 
             report["conclusions"] = conclusions
             return report
+
+        def create_pdf_report(reports, title):
+            pdf = FPDF()
+            pdf.add_page()
+            # Try to use a standard font that supports unicode by replacing characters
+            pdf.set_font("Helvetica", style="B", size=16)
+            pdf.cell(0, 10, title.encode('latin-1', 'replace').decode('latin-1'), ln=True, align="C")
+            pdf.ln(5)
+            
+            for i, rpt in enumerate(reports):
+                if not rpt.get("valid"):
+                    continue
+                pdf.set_font("Helvetica", style="B", size=14)
+                pdf.cell(0, 10, f"Cenario {i+1}: {rpt['label']}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.set_font("Helvetica", size=11)
+                
+                score_str = f"Score Geral: {rpt['score']:.0f}/100"
+                pdf.cell(0, 8, score_str.encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                
+                risk_s = rpt["risk_score"]
+                sem_label = "SEGURA" if risk_s <= 2 else ("PRECAUCAO" if risk_s <= 5 else "CRITICA")
+                pdf.cell(0, 8, f"Risco: {sem_label}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                
+                pdf.cell(0, 8, f"Probabilidade de Chuva: {rpt['prob_rain']:.0f}%".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, f"Temperatura Media: {rpt['avg_temp']:.1f}C (Sensacao: {rpt['avg_app_temp']:.1f}C)".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, f"Vento Medio: {rpt['avg_wind']:.1f} km/h".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                
+                window_txt = rpt["best_window"] if rpt["best_window"] else "-"
+                pdf.cell(0, 8, f"Janela Ideal de Partida: {window_txt}".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.cell(0, 8, f"Quebra de Performance Estimada: +{rpt['perf_drop']:.1f}%".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                
+                pdf.ln(2)
+                pdf.set_font("Helvetica", style="B", size=11)
+                pdf.cell(0, 8, "Conclusoes:".encode('latin-1', 'replace').decode('latin-1'), ln=True)
+                pdf.set_font("Helvetica", size=11)
+                for conc in rpt["conclusions"]:
+                    # Clean emojis since fpdf base fonts don't support them
+                    clean_conc = conc.replace("✅", "").replace("⚠️", "").replace("🔴", "").replace("📉", "").replace("📊", "").replace("🚀", "").replace("🌧", "").replace("💨", "").replace("🌬️", "").strip()
+                    pdf.multi_cell(0, 6, f"- {clean_conc}".encode('latin-1', 'replace').decode('latin-1'))
+                pdf.ln(5)
+                
+            return pdf.output(dest="S").encode("latin-1")
 
         if "Datas" in compare_mode:
             num_dates = st.radio("Quantas datas comparar?", [2, 3], horizontal=True, key="num_compare_dates")
@@ -1553,6 +1615,16 @@ def main():
                 if winner["perf_drop"] > 0:
                     rec_text += f" · Quebra estimada: +{winner['perf_drop']:.1f}%"
                 st.success(rec_text)
+                
+                if any(r.get("valid") for r in reports):
+                    pdf_bytes = create_pdf_report(reports, "Comparacao de Datas - Meteo Running Pro")
+                    st.download_button(
+                        label="📄 Exportar Relatório PDF",
+                        data=pdf_bytes,
+                        file_name="comparador_datas.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
         else:
             # Multi-city mode
@@ -1690,6 +1762,16 @@ def main():
                 if winner["perf_drop"] > 0:
                     rec_text += f" · Quebra estimada: +{winner['perf_drop']:.1f}%"
                 st.success(rec_text)
+
+                if any(r.get("valid") for r in reports):
+                    pdf_bytes = create_pdf_report(reports, "Comparacao de Cidades - Meteo Running Pro")
+                    st.download_button(
+                        label="📄 Exportar Relatório PDF",
+                        data=pdf_bytes,
+                        file_name="comparador_cidades.pdf",
+                        mime="application/pdf",
+                        use_container_width=True
+                    )
 
     with tab_data:
         # ── CSV Export ────────────────────────────
